@@ -1,0 +1,47 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Arquivos de log
+*.log
+
+# Configs de ambiente
+.env
+*.env
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+.pipenv/
+
+# IDEs
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# Test coverage
+htmlcov/
+.tox/
+.nox/
+coverage.*
+.cache
+.pytest_cache/
+
+# MyPy / Pylint
+.mypy_cache/
+.dmypy.json
+.pyre/
+.pytype/
+
+# Build / dist
+build/
+dist/
+*.egg-info/
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
