@@ -1,10 +1,10 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTextEdit,
-    QLineEdit, QPushButton, QLabel, QSizePolicy # Removido QTabWidget, QCheckBox
+    QLineEdit, QPushButton, QLabel, QSizePolicy
 )
 from PySide6.QtCore import Qt
 from src.core.chat.chat_client import ChatClient
-import subprocess # Mantido, embora não usado diretamente no ChatWidget após as mudanças
+import subprocess
 
 class ChatWidget(QWidget):
     def __init__(self, client: ChatClient = None, is_host: bool = False, broadcast_func=None):
@@ -15,8 +15,7 @@ class ChatWidget(QWidget):
         self.broadcast_func = broadcast_func
         self.server_process = None
 
-        # O layout principal do widget será diretamente o layout do chat
-        layout = QVBoxLayout(self) # Este agora é o layout principal do ChatWidget
+        layout = QVBoxLayout(self)
 
         message_area_container = QWidget()
         message_area_container_layout = QVBoxLayout(message_area_container)
@@ -26,10 +25,14 @@ class ChatWidget(QWidget):
             border-radius: 8px; /* Bordas arredondadas */
             padding: 5px; /* Espaçamento interno */
         """)
+        
+        # --- ADICIONE ESTA LINHA ---
+        # Garante que o container da área de mensagens também se expanda verticalmente
+        message_area_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         self.textview = QTextEdit()
         self.textview.setReadOnly(True)
-        self.textview.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.textview.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding) # Já estava correto
         self.textview.setStyleSheet("""
             background-color: #2e2e2f; /* Cor de fundo do textview */
             border: none; /* Remove borda padrão */
@@ -37,7 +40,7 @@ class ChatWidget(QWidget):
             padding: 5px; /* Espaçamento interno */
         """)
         message_area_container_layout.addWidget(self.textview)
-        layout.addWidget(message_area_container) # Adicionado diretamente ao layout principal
+        layout.addWidget(message_area_container)
 
         layout.addSpacing(10)
 
@@ -83,24 +86,7 @@ class ChatWidget(QWidget):
         """)
         input_area_container_layout.addWidget(send_button)
 
-        layout.addWidget(input_area_container) # Adicionado diretamente ao layout principal
-
-        # Removida toda a lógica relacionada ao QTabWidget e à aba de configurações
-        # self.tabs = QTabWidget(self)
-        # layout.addWidget(self.tabs)
-        # self.chat_widget = QWidget()
-        # self.chat_layout = QVBoxLayout(self.chat_widget)
-        # ... (conteúdo do chat movido para o layout principal)
-        # self.tabs.addTab(self.chat_widget, "Chat")
-        # if self.is_host:
-        #     self.settings_widget = QWidget()
-        #     self.settings_layout = QVBoxLayout(self.settings_widget)
-        #     settings_label = QLabel("Configurações do Chat (Host):")
-        #     settings_label.setStyleSheet("color: white;")
-        #     self.settings_layout.addWidget(settings_label)
-        #     self.settings_layout.addStretch()
-        #     self.tabs.addTab(self.settings_widget, "Configurações")
-
+        layout.addWidget(input_area_container)
 
     def on_send_clicked(self):
         mensagem = self.entry.text().strip()
