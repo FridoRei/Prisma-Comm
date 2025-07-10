@@ -1,9 +1,10 @@
+# src/core/chat/chat_server.py
 import socket
 import threading
-from src.core.chat.globals import clientes_lock, handlers 
-from src.core.chat.client_handler import ClientHandler 
+from src.core.chat.globals import clientes_lock, handlers, clientes_autorizados, autorizados_lock # Importar a lista e o lock
+from src.core.chat.client_handler import ClientHandler
 
-def broadcast_from_host(message: str, chat_widget_instance): 
+def broadcast_from_host(message: str, chat_widget_instance):
     if not message:
         return
 
@@ -26,7 +27,7 @@ def broadcast_from_host(message: str, chat_widget_instance):
         except Exception as e:
             print(f"[Servidor] ERRO CRÍTICO no broadcast para {handler.username} ({handler.addr}): {e}")
 
-def start_server(chat_widget_instance, port): 
+def start_server(chat_widget_instance, port):
     print("[Servidor] Iniciando servidor de chat...")
 
     with clientes_lock:
@@ -48,7 +49,17 @@ def start_server(chat_widget_instance, port):
         while True:
             try:
                 conn, addr = server_socket.accept()
-                print(f"[Servidor] Nova conexão de {addr}")
+                client_ip = addr[0] # Obter o IP do cliente
+
+                # --- VERIFICAÇÃO DE AUTORIZAÇÃO ---
+                with autorizados_lock:
+                    if client_ip not in clientes_autorizados:
+                        print(f"[Servidor] Conexão recusada de {addr}: Cliente não autorizado.")
+                        conn.sendall(b"AUTH_REQUIRED") # Envia uma mensagem para o cliente
+                        conn.close()
+                        continue # Pula para a próxima iteração do loop
+
+                print(f"[Servidor] Nova conexão autorizada de {addr}")
 
                 handler = ClientHandler(conn, addr)
 
@@ -70,4 +81,3 @@ def start_server(chat_widget_instance, port):
     finally:
         server_socket.close()
         print("[Servidor] Servidor de chat encerrado.")
-
