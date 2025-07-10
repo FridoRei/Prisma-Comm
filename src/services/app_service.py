@@ -11,7 +11,7 @@ from src.config.settings import DEFAULT_USERNAME, DEFAULT_AUTH_PORT, DEFAULT_COM
 class AppService:
     def __init__(self, main_window_instance):
         self.main_window = main_window_instance
-        self.auth_service = AuthService(self.main_window.auth_port, log_callback=self.main_window.append_log_message)
+        self.auth_service = AuthService(self.main_window.auth_port)
         self.chat_client_instance = None
         self.chat_server_thread = None
         self.is_connected_to_chat = False
