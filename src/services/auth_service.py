@@ -13,10 +13,11 @@ class AuthService:
         if self.auth_server_process and self.auth_server_process.poll() is None:
             print("[P2P-COM] Servidor de autenticação já está rodando.")
             return
-
-        try:
+        
             server_script_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'server.py'))
-
+            print(f"[P2P-COM] Caminho do script do servidor: {server_script_path}")
+            
+        try:
             self.auth_server_process = subprocess.Popen(
                 [sys.executable, server_script_path, str(self.auth_port)],
                 stdout=subprocess.PIPE,
