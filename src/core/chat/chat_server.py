@@ -1,7 +1,8 @@
 # src/core/chat/chat_server.py
 import socket
 import threading
-from src.core.chat.globals import clientes_lock, handlers, clientes_autorizados, autorizados_lock # Importar a lista e o lock
+# Importar a lista de autorizados e seu lock
+from src.core.chat.globals import clientes_lock, handlers, clientes_autorizados, autorizados_lock
 from src.core.chat.client_handler import ClientHandler
 
 def broadcast_from_host(message: str, chat_widget_instance):
@@ -31,16 +32,18 @@ def start_server(chat_widget_instance, port):
     print("[Servidor] Iniciando servidor de chat...")
 
     with clientes_lock:
-        handlers.clear()
+        handlers.clear() # Limpa handlers antigos se houver
 
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
-    host = '0.0.0.0'
+    host = '0.0.0.0' # Escuta em todas as interfaces disponíveis
 
     try:
         server_socket.bind((host, port))
-        server_socket.listen(5)
+        server_socket.listen(5) # Permite até 5 conexões pendentes
+        server_socket.settimeout(1.0) # Define um timeout para accept para permitir encerramento limpo
+
         print(f"[Servidor] Servidor de chat escutando em {host}:{port}")
 
         if chat_widget_instance:
@@ -54,25 +57,40 @@ def start_server(chat_widget_instance, port):
                 # --- VERIFICAÇÃO DE AUTORIZAÇÃO ---
                 with autorizados_lock:
                     if client_ip not in clientes_autorizados:
-                        print(f"[Servidor] Conexão recusada de {addr}: Cliente não autorizado.")
-                        conn.sendall(b"AUTH_REQUIRED") # Envia uma mensagem para o cliente
+                        print(f"[Servidor] Conexão recusada de {addr}: Cliente não autorizado. Lista de autorizados: {clientes_autorizados}")
+                        try:
+                            # Envia uma mensagem para o cliente informando que a autenticação é necessária
+                            conn.sendall(b"AUTH_REQUIRED_CHAT")
+                        except Exception as send_e:
+                            print(f"[Servidor] Erro ao enviar AUTH_REQUIRED_CHAT para {addr}: {send_e}")
                         conn.close()
-                        continue # Pula para a próxima iteração do loop
+                        continue # Pula para a próxima iteração do loop, não processa esta conexão
 
-                print(f"[Servidor] Nova conexão autorizada de {addr}")
+                print(f"[Servidor] Nova conexão autorizada de {addr}. Lista de autorizados: {clientes_autorizados}")
 
+                # Se o cliente está autorizado, cria um handler para ele
                 handler = ClientHandler(conn, addr)
 
+                # Cria uma nova thread para lidar com o cliente
                 thread = threading.Thread(target=handler.run, daemon=True)
 
+                # Conecta os sinais do handler ao chat_widget da GUI
                 if chat_widget_instance:
                     handler.new_message_for_host.connect(chat_widget_instance.add_message_to_chat)
                     handler.client_status_for_host.connect(chat_widget_instance.add_message_to_chat)
 
                 thread.start()
 
+            except socket.timeout:
+                # Isso é normal, significa que não houve conexões no último segundo
+                pass
             except Exception as e:
-                print(f"[Servidor] Erro ao aceitar conexão: {e}")
+                if threading.main_thread().is_alive(): # Verifica se a thread principal ainda está ativa
+                    print(f"[Servidor] Erro ao aceitar conexão: {e}")
+                else:
+                    # Se a thread principal não está ativa, provavelmente a aplicação está fechando
+                    print("[Servidor] Servidor de chat encerrando devido ao fechamento da aplicação.")
+                    break # Sai do loop while True
 
     except Exception as e:
         print(f"[Servidor] Erro fatal no servidor: {e}")

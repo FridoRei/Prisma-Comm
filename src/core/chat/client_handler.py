@@ -1,7 +1,8 @@
 # src/core/chat/client_handler.py
 import socket
 from PySide6.QtCore import QObject, Signal, Slot
-from src.core.chat.globals import clientes_lock, handlers, clientes_autorizados, autorizados_lock # Importar a lista e o lock
+# Importar a lista de autorizados e seu lock
+from src.core.chat.globals import clientes_lock, handlers, clientes_autorizados, autorizados_lock
 
 class ClientHandler(QObject):
 
@@ -12,20 +13,22 @@ class ClientHandler(QObject):
         super().__init__()
         self.client_socket = client_socket
         self.addr = addr
-        self.username = f"[{addr[0]}]"
+        self.username = f"[{addr[0]}]" # Nome de usuário padrão é o IP
         self._running = True
-        self.client_socket.settimeout(1.0)
+        self.client_socket.settimeout(1.0) # Define um timeout para recv
 
     def stop(self):
         self._running = False
 
     @Slot()
     def run(self):
+        # Adiciona o handler à lista global de handlers ativos
         with clientes_lock:
             handlers.append(self)
             self.client_status_for_host.emit(f"[Servidor] Cliente conectado: {self.addr}")
 
         try:
+            # Tenta receber o nome de usuário do cliente
             try:
                 initial_message_bytes = self.client_socket.recv(1024)
                 if initial_message_bytes:
@@ -38,32 +41,34 @@ class ClientHandler(QObject):
                         self.new_message_for_host.emit(f"[Servidor] Mensagem inesperada de {self.addr}: {initial_message}")
                 else:
                     print(f"[Servidor] Cliente {self.addr} desconectou antes de enviar o nome.")
-                    return
+                    return # Sai da função se o cliente desconectou imediatamente
             except socket.timeout:
                 print(f"[Servidor] Timeout ao esperar nome de usuário de {self.addr}. Usando IP.")
             except Exception as e:
                 print(f"[Servidor] Erro ao receber nome de usuário de {self.addr}: {e}. Usando IP.")
 
+            # Loop principal para receber mensagens do cliente
             while self._running:
                 try:
                     mensagem_bytes = self.client_socket.recv(1024)
-                    if not mensagem_bytes:
+                    if not mensagem_bytes: # Cliente desconectou
                         print(f"[Servidor] Cliente {self.username} ({self.addr}) desconectou")
-                        break
+                        break # Sai do loop
 
                     mensagem = mensagem_bytes.decode('utf-8').strip()
-                    self.new_message_for_host.emit(f"{self.username}: {mensagem}")
-                    self.broadcast_message(f"{self.username}: {mensagem}", self.client_socket)
+                    self.new_message_for_host.emit(f"{self.username}: {mensagem}") # Exibe no host
+                    self.broadcast_message(f"{self.username}: {mensagem}", self.client_socket) # Envia para outros clientes
 
                 except socket.timeout:
-                    continue
+                    continue # Continua esperando se houver timeout (nenhuma mensagem recebida)
                 except Exception as e:
-                    if self._running:
+                    if self._running: # Apenas imprime erro se o handler ainda estiver ativo
                         print(f"[Servidor] Erro com cliente {self.username} ({self.addr}): {e}")
                         self.new_message_for_host.emit(f"[Servidor] Erro com cliente {self.username} ({self.addr}): {e}")
-                    break
+                    break # Sai do loop em caso de erro
 
         finally:
+            # Garante que o handler seja removido e o socket fechado
             with clientes_lock:
                 if self in handlers:
                     handlers.remove(self)
@@ -73,7 +78,7 @@ class ClientHandler(QObject):
             with autorizados_lock:
                 if self.addr[0] in clientes_autorizados:
                     clientes_autorizados.remove(self.addr[0])
-                    print(f"[Servidor] Cliente {self.addr[0]} removido da lista de autorizados.")
+                    print(f"[Servidor] Cliente {self.addr[0]} removido da lista de autorizados. Lista atual: {clientes_autorizados}")
 
             self.client_socket.close()
             self.client_status_for_host.emit(f"[Servidor] Cliente '{self.username}' desconectado.")
@@ -90,7 +95,7 @@ class ClientHandler(QObject):
         message_bytes = message.encode('utf-8')
 
         with clientes_lock:
-            current_handlers = handlers.copy()
+            current_handlers = handlers.copy() # Copia para evitar problemas de modificação durante iteração
 
         for handler in current_handlers:
             if handler.client_socket != sender_socket and handler._running:

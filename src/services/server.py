@@ -6,7 +6,8 @@ import signal
 import time
 import sys
 from src.core.auth.token_manager import gerar_token, validar_token, calcular_palavra_base
-from src.core.chat.globals import clientes_autorizados, autorizados_lock # Importar a nova lista e o lock
+# Importar a nova lista e o lock do arquivo globals.py
+from src.core.chat.globals import clientes_autorizados, autorizados_lock
 
 HOST = '0.0.0.0'
 PORT = 20556
@@ -32,7 +33,7 @@ server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 try:
     server_socket.bind((HOST, PORT))
     server_socket.listen(1)
-    server_socket.settimeout(1.0)
+    server_socket.settimeout(1.0) # Define um timeout para accept para permitir que o loop verifique 'running'
 
     print(f"Esperando por uma conexão na porta {PORT}...")
 
@@ -42,7 +43,7 @@ try:
             conn, addr = server_socket.accept()
             client_ip = addr[0] # Obter o IP do cliente
             print(f"\nConexão recebida de {addr}")
-            resposta = "AUTH_FAILURE"
+            resposta = "AUTH_FAILURE" # Resposta padrão em caso de falha
 
             try:
                 token_recebido_bytes = conn.recv(1024)
@@ -53,6 +54,7 @@ try:
                 token_recebido = token_recebido_bytes.decode('utf-8').strip()
                 print(f"[SERVIDOR] Token (hash bcrypt) recebido do cliente: {token_recebido}")
 
+                # A linha abaixo é apenas para depuração, pode ser removida em produção
                 palavra_base_local_servidor = calcular_palavra_base()
                 print(f"[SERVIDOR] Palavra base calculada pelo servidor (para depuração): {palavra_base_local_servidor}")
 
@@ -62,7 +64,7 @@ try:
                     # Adicionar o IP do cliente à lista de autorizados
                     with autorizados_lock:
                         clientes_autorizados.add(client_ip)
-                    print(f"[SERVIDOR] Cliente {client_ip} adicionado à lista de autorizados.")
+                    print(f"[SERVIDOR] Cliente {client_ip} adicionado à lista de autorizados. Lista atual: {clientes_autorizados}")
                 else:
                     print("[SERVIDOR] Token INVÁLIDO. Desencontro ou palavra base incorreta.")
                     resposta = "AUTH_FAILURE_INVALID_TOKEN"
@@ -80,9 +82,10 @@ try:
                     print(f"[SERVIDOR] Resposta enviada ao cliente {addr}: {resposta}")
 
         except socket.timeout:
+            # Isso é normal, significa que não houve conexões no último segundo
             pass
         except Exception as e:
-            if running:
+            if running: # Apenas imprime erros se o servidor ainda estiver rodando
                 print(f"[SERVIDOR] Erro ao aceitar conexão: {e}")
 
 except Exception as e:
