@@ -2,7 +2,7 @@ import sys
 import warnings
 from PySide6.QtWidgets import QApplication
 from src.gui.main_window import MainWindow
-from src.core.utils.log_redirector import ConsoleOutputRedirector # Nova importação
+from src.core.utils.log_redirector import ConsoleOutputRedirector 
 
 def formatar_warning(mensagem, categoria, filename, lineno, file=None, line=None):
     if categoria == RuntimeWarning:
@@ -19,7 +19,6 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     win = MainWindow()
 
-    # Redireciona stdout/stderr para o log da GUI
     original_stdout = sys.stdout
     original_stderr = sys.stderr
     console_redirector = ConsoleOutputRedirector(original_stdout, original_stderr)

@@ -1,10 +1,9 @@
-# src/core/chat/chat_client.py
 import socket
 import threading
 from PySide6.QtCore import QObject, Signal, Slot
-from src.core.network.connection_manager import obter_gateway # Nova importação
+from src.core.network.connection_manager import obter_gateway 
 
-class ChatClientWorker(QObject): # Classe responsável por estabelecer o worker que ira escutar mensagens vindas do host.
+class ChatClientWorker(QObject): 
     message_received = Signal(str)
     connection_error = Signal(str)
     disconnected = Signal()
@@ -25,7 +24,7 @@ class ChatClientWorker(QObject): # Classe responsável por estabelecer o worker 
             print(f"[CLIENT] Erro ao fechar socket do worker: {e}")
 
     @Slot()
-    def listen_for_messages(self): # Metodo principal
+    def listen_for_messages(self): 
         while self._running:
             try:
                 message = self.client_socket.recv(1024).decode()
@@ -45,17 +44,17 @@ class ChatClientWorker(QObject): # Classe responsável por estabelecer o worker 
         print("[CLIENT] Thread de escuta encerrada.")
 
 
-class ChatClient: # Classe responsável por gerenciar a comunicação cliente-servidor
-    def __init__(self, port, chat_widget=None, nome_usuario="Usuário"): # Renomeado chat_window para chat_widget
+class ChatClient: 
+    def __init__(self, port, chat_widget=None, nome_usuario="Usuário"): 
         self.host = obter_gateway()
         self.port = port
-        self.chat_widget = chat_widget # Renomeado chat_window para chat_widget
+        self.chat_widget = chat_widget 
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.nome_usuario = nome_usuario
         self.worker = None
         self.thread = None
 
-    def connect(self): # Conectar o socket ao servidor, envia os primeiros dados e da partida no worker.
+    def connect(self): 
         if not self.host:
             print("[CLIENT] Gateway não encontrado, verifique sua rede.")
             return
@@ -72,7 +71,7 @@ class ChatClient: # Classe responsável por gerenciar a comunicação cliente-se
             self.thread.start()
         except Exception as e:
             print(f"[CLIENT] Erro ao estabelecer conexão: {e}")
-            if self.chat_widget: # Renomeado chat_window para chat_widget
+            if self.chat_widget: 
                 self.chat_widget.add_message_to_chat(f"[CLIENT] Erro ao conectar: {e}")
 
             if self.worker:
@@ -80,7 +79,7 @@ class ChatClient: # Classe responsável por gerenciar a comunicação cliente-se
             else:
                 pass
 
-    def send_message(self, message): # Envia as menssagens do cliente para o servidor.
+    def send_message(self, message): 
         try:
             if not self.client_socket:
                 raise Exception("[CLIENT] Socket não inicializado.")
@@ -88,15 +87,11 @@ class ChatClient: # Classe responsável por gerenciar a comunicação cliente-se
             self.client_socket.sendall((message + "\n").encode())
         except Exception as e:
             print(f"[CLIENT] Erro ao enviar mensagem: {e}")
-            if self.chat_widget: # Renomeado chat_window para chat_widget
+            if self.chat_widget: 
                 self.chat_widget.add_message_to_chat(f"[CLIENT] Erro ao enviar: {e}")
             raise
 
-    def disconnect(self): # Para o worker.
+    def disconnect(self): 
         if self.worker:
             self.worker.stop()
         print("[CLIENT] Cliente desconectado.")
-
-# O bloco if __name__ == "__main__": foi removido daqui,
-# pois a execução independente de ChatClient agora seria feita via main.py ou testes.
-

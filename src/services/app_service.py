@@ -1,4 +1,3 @@
-# src/services/app_service.py
 import threading
 from PySide6.QtWidgets import QMessageBox
 from src.core.network.wifi_manager import detectar_interfaces_wifi, criar_hotspot
@@ -90,7 +89,6 @@ class AppService:
         self.chat_client_instance.connect()
 
         if self.chat_client_instance.worker:
-            # Adicionar verificação para chat_widget_instance antes de conectar/desconectar
             if self.main_window.chat_widget_instance:
                 self.chat_client_instance.worker.message_received.connect(self.main_window.chat_widget_instance.add_message_to_chat)
                 self.chat_client_instance.worker.connection_error.connect(self.main_window.chat_widget_instance.add_message_to_chat)
@@ -106,7 +104,6 @@ class AppService:
     def disconnect_chat_client(self):
         if self.chat_client_instance:
             if self.chat_client_instance.worker:
-                # Adicionar verificação para self.main_window.chat_widget_instance
                 if self.main_window.chat_widget_instance:
                     try:
                         self.chat_client_instance.worker.message_received.disconnect(self.main_window.chat_widget_instance.add_message_to_chat)

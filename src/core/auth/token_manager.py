@@ -1,7 +1,6 @@
-# src/core/auth/token_manager.py
 import bcrypt
 from datetime import datetime
-from src.config.settings import SALT_FIXO # Importa o SALT_FIXO das configurações
+from src.config.settings import SALT_FIXO 
 
 def calcular_palavra_base():
     data_atual = datetime.now()

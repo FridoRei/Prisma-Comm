@@ -1,8 +1,7 @@
-# src/gui/dialogs.py
 from PySide6.QtWidgets import (QDialog, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QLineEdit, QMessageBox)
 from PySide6.QtGui import QFont
-from src.core.network.wifi_manager import detectar_interfaces_wifi # Nova importação
-from src.config.settings import DEFAULT_HOTSPOT_SSID, DEFAULT_HOTSPOT_PASSWORD # Nova importação
+from src.core.network.wifi_manager import detectar_interfaces_wifi 
+from src.config.settings import DEFAULT_HOTSPOT_SSID, DEFAULT_HOTSPOT_PASSWORD 
 
 class WifiInterfaceSelectionDialog(QDialog):
     def __init__(self, parent=None):

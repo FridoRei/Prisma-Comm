@@ -1,14 +1,13 @@
-# src/core/chat/chat_server.py
 import socket
 import threading
-from src.core.chat.globals import clientes_lock, handlers # Nova importação
-from src.core.chat.client_handler import ClientHandler # Nova importação
+from src.core.chat.globals import clientes_lock, handlers 
+from src.core.chat.client_handler import ClientHandler 
 
-def broadcast_from_host(message: str, chat_widget_instance): # Envia menssagem do host para os clientes
+def broadcast_from_host(message: str, chat_widget_instance): 
     if not message:
         return
 
-    if chat_widget_instance: # Se host tem instancia de janela de chat, adiciona menssagem na tela
+    if chat_widget_instance:
         chat_widget_instance.add_message_to_chat(f"Você (Host): {message}")
 
     message_with_prefix = f"[Host] {message}"
@@ -27,7 +26,7 @@ def broadcast_from_host(message: str, chat_widget_instance): # Envia menssagem d
         except Exception as e:
             print(f"[Servidor] ERRO CRÍTICO no broadcast para {handler.username} ({handler.addr}): {e}")
 
-def start_server(chat_widget_instance, port): # Inicia o serviço do servidor de comunicação
+def start_server(chat_widget_instance, port): 
     print("[Servidor] Iniciando servidor de chat...")
 
     with clientes_lock:

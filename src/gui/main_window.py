@@ -2,10 +2,10 @@ from PySide6.QtWidgets import (QMainWindow, QDialog, QLabel, QPushButton, QVBoxL
 from PySide6.QtCore import Slot, Qt, QObject, Signal
 from PySide6.QtGui import QFont
 
-from src.gui.main_window_ui import MainWindowUI # Nova importação
-from src.gui.chat_widget import ChatWidget # Nova importação
-from src.services.app_service import AppService # Nova importação
-from src.config.settings import DEFAULT_USERNAME, DEFAULT_AUTH_PORT, DEFAULT_COMM_PORT # Nova importação
+from src.gui.main_window_ui import MainWindowUI 
+from src.gui.chat_widget import ChatWidget 
+from src.services.app_service import AppService 
+from src.config.settings import DEFAULT_USERNAME, DEFAULT_AUTH_PORT, DEFAULT_COMM_PORT
 import threading
 
 class MainWindow(QMainWindow):
@@ -23,7 +23,6 @@ class MainWindow(QMainWindow):
         self.chat_widget_instance = None
         self.is_connected_to_chat = False
 
-        # Instancia o AppService, passando a si mesmo como referência
         self.app_service = AppService(self)
 
         self.btn_home.clicked.connect(self.show_home_page)
@@ -31,7 +30,6 @@ class MainWindow(QMainWindow):
         self.btn_chat.clicked.connect(self.show_chat_page)
         self.btn_logs.clicked.connect(self.show_logs_page)
 
-        # Conecta os botões aos métodos do AppService
         self.btn_host.clicked.connect(self.on_host_clicked)
         self.btn_join.clicked.connect(self.on_join_clicked)
 
@@ -44,10 +42,6 @@ class MainWindow(QMainWindow):
 
         self.show_home_page()
 
-        # O redirecionamento de logs agora é feito em main.py e conectado aqui
-        # self.redirect_stdout_stderr() # Removido daqui
-
-    # O método append_log_message permanece aqui para ser o slot do sinal
     @Slot(str)
     def append_log_message(self, message):
         self.logs_text_edit.append(message.strip())
@@ -111,12 +105,10 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def on_host_clicked(self):
-        # Delega a lógica para o AppService
         self.app_service.handle_host_clicked()
 
     @Slot()
     def on_join_clicked(self):
-        # Delega a lógica para o AppService
         self.app_service.handle_join_clicked(self.current_username)
 
     def show_dialog(self, titulo, mensagem):
@@ -130,9 +122,6 @@ class MainWindow(QMainWindow):
     def on_chat_disconnected(self):
         print("Chat desconectado. Resetando interface.")
         self.is_connected_to_chat = False
-
-        # A lógica de desconexão do cliente agora está no AppService
-        # self.app_service.disconnect_chat_client() # Não chamar aqui para evitar loop ou duplicação
 
         if self.chat_widget_instance:
             self.chat_layout.removeWidget(self.chat_widget_instance)
@@ -158,10 +147,9 @@ class MainWindow(QMainWindow):
             self.chat_widget_instance.deleteLater()
             self.chat_widget_instance = None
 
-        # Passa a função de broadcast do chat_server para o ChatWidget se for host
-        from src.core.chat.chat_server import broadcast_from_host # Importação local para evitar circular
-        self.chat_widget_instance = ChatWidget( # Usando ChatWidget
-            client=self.app_service.chat_client_instance, # Pega o cliente do app_service
+        from src.core.chat.chat_server import broadcast_from_host 
+        self.chat_widget_instance = ChatWidget( 
+            client=self.app_service.chat_client_instance, 
             is_host=is_host,
             broadcast_func=broadcast_from_host if is_host else None
         )
@@ -169,14 +157,12 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         print("[P2P-COM] Fechando aplicação. Encerrando serviços...")
-        self.app_service.shutdown() # Delega o shutdown para o AppService
+        self.app_service.shutdown() 
 
         print("Verificando threads ativas antes do encerramento final...")
         for thread in threading.enumerate():
             if thread.is_alive():
                 print(f"  Thread ativa: {thread.name} (Daemon: {thread.daemon})")
 
-        # Não é mais necessário chamar QApplication.instance().quit() aqui,
-        # pois sys.exit(app.exec()) em main.py já cuida disso.
         event.accept()
 
