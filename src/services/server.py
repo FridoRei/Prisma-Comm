@@ -32,6 +32,10 @@ def run_auth_server(auth_port, stop_event):
                 else:
                     print("[AuthServer] Token inválido")
                     resposta = "AUTH_FAILURE"
+            
+            except socket.timeout:
+                print("[SERVER-AUTH] Timeout ao receber token do cliente.")
+                resposta = "AUTH_FAILURE_TIMEOUT"
 
                 conn.sendall(resposta.encode('utf-8'))
                 conn.close()
