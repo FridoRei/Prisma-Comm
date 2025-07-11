@@ -5,7 +5,6 @@ import signal
 import time
 import sys 
 from src.core.auth.token_manager import gerar_token, validar_token, calcular_palavra_base 
-from src.core.chat.globals import authenticated_ips, authenticated_ips_lock
 
 HOST = '0.0.0.0'
 PORT = 20556 
@@ -40,7 +39,6 @@ try:
         try:
             conn, addr = server_socket.accept()
             print(f"\n[SERVER-AUTH] Conexão recebida de {addr}")
-            client_ip = addr[0]
             resposta = "AUTH_FAILURE"
 
             try:
@@ -56,8 +54,7 @@ try:
                 print(f"[SERVER-AUTH] Palavra base calculada pelo servidor (para depuração): {palavra_base_local_servidor}")
 
                 if validar_token(token_recebido, addr):
-                    authenticated_ips.add(client_ip)
-                    print(f"[SERVER-AUTH] IP {client_ip} adicionado à lista de IPs autenticados. Lista atual: {authenticated_ips}")
+                    print("[SERVER-AUTH] Token VALIDADO com sucesso!")
                     resposta = "AUTH_SUCCESS"
                 else:
                     print("[SERVER-AUTH] Token INVÁLIDO. Desencontro ou palavra base incorreta.")
