@@ -40,6 +40,7 @@ try:
         try:
             conn, addr = server_socket.accept()
             print(f"\n[SERVER-AUTH] Conexão recebida de {addr}")
+            client_ip = addr[0]
             resposta = "AUTH_FAILURE"
 
             try:
