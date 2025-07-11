@@ -7,7 +7,7 @@ from cryptography.hazmat.primitives.asymmetric import dh
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
-from src.core.crypto.dh_params import load_dh_parameters
+from src.core.auth.dh_params import load_dh_parameters
 
 class ChatClientWorker(QObject):
     message_received = Signal(str)
