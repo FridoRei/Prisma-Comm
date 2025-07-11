@@ -35,7 +35,7 @@ def gerar_token():
         token = bcrypt.hashpw(palavra_base.encode("utf-8"), SALT_FIXO)
         return token.decode("utf-8")
     except Exception as e:
-        print(f"[ERRO] ao gerar token: {e}")
+        print(f"[TokenManager] Erro ao gerar token: {e}")
         return None
 
 def validar_token(client_token, addr):
@@ -45,6 +45,5 @@ def validar_token(client_token, addr):
         print(f"[SERVIDOR] Tentativa de verificação de {addr}: {result}")
         return result
     except Exception as e:
-        print(f"[ERRO] ao validar token: {e}")
         return False
 
