@@ -1,7 +1,9 @@
 import socket
 import threading
+import ssl # Adicionar import
 from PySide6.QtCore import QObject, Signal, Slot
 from src.core.network.connection_manager import obter_gateway
+from src.config.settings import SERVER_CERT, TLS_SERVER_HOSTNAME, TLS_VERIFY_MODE # Adicionar import
 
 class ChatClientWorker(QObject):
     message_received = Signal(str)
@@ -17,6 +19,7 @@ class ChatClientWorker(QObject):
         self._running = False
         try:
             if self.client_socket:
+                # Shutdown e close para o socket SSL
                 self.client_socket.shutdown(socket.SHUT_RDWR)
                 self.client_socket.close()
                 print("[CLIENT] Socket do worker fechado.")
@@ -53,7 +56,7 @@ class ChatClient:
         self.host = obter_gateway()
         self.port = port
         self.chat_widget = chat_widget
-        self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.client_socket = None # Inicializar como None
         self.nome_usuario = nome_usuario
         self.worker = None
         self.thread = None
@@ -63,8 +66,15 @@ class ChatClient:
             print("[CLIENT] Gateway não encontrado, verifique sua rede.")
             return
 
+        context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+        context.load_verify_locations(SERVER_CERT)
+        context.verify_mode = getattr(ssl, TLS_VERIFY_MODE, ssl.CERT_REQUIRED)
+
         try:
-            self.client_socket.connect((self.host, self.port))
+            raw_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            raw_socket.connect((self.host, self.port))
+            self.client_socket = context.wrap_socket(raw_socket, server_hostname=TLS_SERVER_HOSTNAME) # Envolver o socket com TLS
+
             print(f"[CLIENT] Conectado ao servidor em {self.host}:{self.port}")
 
             self.client_socket.sendall(f"__USERNAME__:{self.nome_usuario}\n".encode())
@@ -73,6 +83,14 @@ class ChatClient:
             self.thread = threading.Thread(target=self.worker.listen_for_messages, daemon=True)
 
             self.thread.start()
+        except ssl.SSLError as e:
+            print(f"[CLIENT] Erro SSL ao estabelecer conexão: {e}")
+            if self.chat_widget:
+                self.chat_widget.add_message_to_chat(f"[CLIENT] Erro SSL ao conectar: {e}")
+            if self.worker:
+                self.worker.disconnected.emit()
+            else:
+                pass
         except Exception as e:
             print(f"[CLIENT] Erro ao estabelecer conexão: {e}")
             if self.chat_widget:
@@ -86,7 +104,7 @@ class ChatClient:
     def send_message(self, message):
         try:
             if not self.client_socket:
-                raise Exception("[CLIENT] Socket não inicializado.")
+                raise Exception("[CLIENT] Socket não inicializado ou desconectado.")
 
             self.client_socket.sendall((message + "\n").encode())
         except Exception as e:

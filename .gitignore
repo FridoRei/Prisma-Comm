@@ -45,3 +45,5 @@ dist/
 # Sistema operacional
 .DS_Store
 Thumbs.db
+
+src/core/auth/certs/
