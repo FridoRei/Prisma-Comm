@@ -46,4 +46,4 @@ dist/
 .DS_Store
 Thumbs.db
 
-src/core/auth/certs/
+src/core/auth/secret/*

@@ -6,7 +6,7 @@ from cryptography.hazmat.primitives.asymmetric import dh
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
-from src.config.settings import DH_P, DH_G # Importar os parâmetros DH
+from src.core.crypto.dh_params import load_dh_parameters
 
 class ClientHandler(QObject):
     new_message_for_host = Signal(str)
@@ -95,13 +95,11 @@ class ClientHandler(QObject):
                 print(f"[ClientHandler] Timeout ao esperar nome de usuário de {self.addr}. Usando IP.")
             except Exception as e:
                 print(f"[ClientHandler] Erro ao receber nome de usuário de {self.addr}: {e}. Usando IP.")
-                return # Encerrar em caso de erro
+                return 
 
-            # 2. Troca de chaves Diffie-Hellman
+
             try:
-                # Gerar parâmetros DH (se não existirem, ou usar os do settings)
-                # Para simplificar, usaremos os parâmetros fixos do settings
-                parameters = dh.DHParameterNumbers(DH_P, DH_G).parameters(default_backend())
+                parameters = load_dh_parameters()
                 self_private_key = parameters.generate_private_key()
                 self_public_key_bytes = self_private_key.public_key().public_bytes(
                     encoding=serialization.Encoding.PEM,

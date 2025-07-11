@@ -7,7 +7,7 @@ from cryptography.hazmat.primitives.asymmetric import dh
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
-from src.config.settings import DH_P, DH_G # Importar os parâmetros DH
+from src.core.crypto.dh_params import load_dh_parameters
 
 class ChatClientWorker(QObject):
     message_received = Signal(str)
@@ -69,8 +69,8 @@ class ChatClient:
         self.nome_usuario = nome_usuario
         self.worker = None
         self.thread = None
-        self.shared_key = None # Chave secreta compartilhada
-        self.cipher = None     # Objeto Cipher AES
+        self.shared_key = None 
+        self.cipher = None     
 
     def _derive_key(self, shared_secret):
         return HKDF(
@@ -130,7 +130,7 @@ class ChatClient:
             self.client_socket.sendall(f"__USERNAME__:{self.nome_usuario}\n".encode())
 
             # 2. Troca de chaves Diffie-Hellman
-            parameters = dh.DHParameterNumbers(DH_P, DH_G).parameters(default_backend())
+            parameters = load_dh_parameters()
             self_private_key = parameters.generate_private_key()
             self_public_key_bytes = self_private_key.public_key().public_bytes(
                 encoding=serialization.Encoding.PEM,
