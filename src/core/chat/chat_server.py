@@ -18,9 +18,7 @@ def broadcast_from_host(message: str, chat_widget_instance):
     for handler in current_handlers:
         try:
             if handler._running:
-                print(f"[ChatServer] Enviando mensagem do host para {handler.username} ({handler.addr})...")
                 handler.send_to_client(message_with_prefix)
-                print(f"[ChatServer] Mensagem enviada com sucesso para {handler.username} ({handler.addr}).")
             else:
                 print(f"[ChatServer] Handler para {handler.username} ({handler.addr}) não está rodando, pulando.")
         except Exception as e:
