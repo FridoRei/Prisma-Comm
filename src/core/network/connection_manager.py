@@ -1,10 +1,8 @@
 import subprocess
 import socket
-import ssl # Adicionar import
-from src.core.auth.token_manager import gerar_token, calcular_palavra_base
-from src.config.settings import SERVER_CERT, TLS_SERVER_HOSTNAME, TLS_VERIFY_MODE # Adicionar import
+from src.core.auth.token_manager import gerar_token, calcular_palavra_base 
 
-def obter_gateway():
+def obter_gateway(): 
     try:
         result = subprocess.run(["ip", "route"], capture_output=True, text=True)
         for line in result.stdout.splitlines():
@@ -22,34 +20,29 @@ def verificar_conexao_com_host(porta):
         print("Gateway não encontrado.")
         return False
 
-    context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
-    context.load_verify_locations(SERVER_CERT)
-    context.verify_mode = getattr(ssl, TLS_VERIFY_MODE, ssl.CERT_REQUIRED) # Usar a configuração do settings
-
     try:
-        with socket.create_connection((gateway, porta), timeout=5) as sock:
-            with context.wrap_socket(sock, server_hostname=TLS_SERVER_HOSTNAME) as ssock: # Envolver o socket com TLS
-                token_para_envio = gerar_token()
-                if not token_para_envio:
-                    print("[CLIENTE] Erro ao gerar token para envio.")
-                    return False
+        with socket.create_connection((gateway, porta), timeout=5) as sock: 
 
-                ssock.sendall(token_para_envio.encode('utf-8'))
+            token_para_envio = gerar_token() 
+            if not token_para_envio:
+                print("[CLIENTE] Erro ao gerar token para envio.")
+                return False
 
-                resposta_servidor = ssock.recv(1024).decode('utf-8').strip()
+            sock.sendall(token_para_envio.encode('utf-8')) 
 
-                if resposta_servidor == "AUTH_SUCCESS":
-                    return True
-                else:
-                    print(f"[CLIENTE] Autenticação falhou: {resposta_servidor}")
-                    return False
+            resposta_servidor = sock.recv(1024).decode('utf-8').strip()
 
-    except ssl.SSLError as e: # Capturar erros específicos de SSL
-        print(f"[ERRO] Erro SSL na conexão com o host de autenticação ({gateway}:{porta}): {e}")
+            if resposta_servidor == "AUTH_SUCCESS": 
+                return True
+            else: 
+                print(f"[CLIENTE] Autenticação falhou: {resposta_servidor}")
+                return False
+
     except socket.timeout:
-        print(f"[ERRO] Timeout na conexão com o host de autenticação ({gateway}:{porta}).")
+        print(f"[ERRO] Timeout na conexão com o host de autenticação ({gateway}:{porta}).") 
     except ConnectionRefusedError:
         print(f"[ERRO] Conexão recusada pelo host de autenticação ({gateway}:{porta}). O servidor pode não estar ativo ou a porta está bloqueada.")
     except Exception as e:
-        print(f"[ERRO] Falha na conexão com o host de autenticação: {e}")
+        print(f"[ERRO] Falha na conexão com o host de autenticação: {e}") 
     return False
+
