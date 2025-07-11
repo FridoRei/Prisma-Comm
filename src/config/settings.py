@@ -16,5 +16,5 @@ CERTS_DIR = os.path.join(BASE_DIR, 'core', 'auth', 'certs')
 
 SERVER_CERT = os.path.join(CERTS_DIR, 'server.crt')
 SERVER_KEY = os.path.join(CERTS_DIR, 'server.key')
-TLS_SERVER_HOSTNAME = "localhost"  
+TLS_SERVER_HOSTNAME = "10.42.0.1"  
 TLS_VERIFY_MODE = "CERT_REQUIRED"
