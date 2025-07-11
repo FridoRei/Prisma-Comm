@@ -1,104 +1,99 @@
 import socket
 import threading
-from PySide6.QtCore import QObject, Signal, Slot
-from src.core.network.connection_manager import obter_gateway
+from src.core.chat.globals import clientes_lock, handlers, authenticated_ips, authenticated_ips_lock # Importar a lista e o lock
+from src.core.chat.client_handler import ClientHandler 
 
-class ChatClientWorker(QObject):
-    message_received = Signal(str)
-    connection_error = Signal(str)
-    disconnected = Signal()
+def broadcast_from_host(message: str, chat_widget_instance): 
+    if not message:
+        return
 
-    def __init__(self, client_socket):
-        super().__init__()
-        self.client_socket = client_socket
-        self._running = True
+    if chat_widget_instance:
+        chat_widget_instance.add_message_to_chat(f"Você (Host): {message}")
 
-    def stop(self):
-        self._running = False
+    message_with_prefix = f"[Host] {message}"
+
+    with clientes_lock:
+        current_handlers = handlers.copy()
+
+    for handler in current_handlers:
         try:
-            if self.client_socket:
-                self.client_socket.shutdown(socket.SHUT_RDWR)
-                self.client_socket.close()
-                print("[CLIENT] Socket do worker fechado.")
-        except Exception as e:
-            print(f"[CLIENT] Erro ao fechar socket do worker: {e}")
-
-    @Slot()
-    def listen_for_messages(self):
-        while self._running:
-            try:
-                message = self.client_socket.recv(1024).decode()
-                if message:
-                    if message == "AUTH_REQUIRED": # Adicionar tratamento para AUTH_REQUIRED
-                        self.connection_error.emit("[CLIENT] Conexão recusada: Autenticação necessária. Por favor, autentique-se primeiro.")
-                        self.disconnected.emit()
-                        break
-                    self.message_received.emit(message)
-                else:
-                    self.message_received.emit("[CLIENT] Conexão perdida.")
-                    self.disconnected.emit()
-                    break
-            except Exception as e:
-                if self._running:
-                    self.connection_error.emit(f"[CLIENT] Erro de conexão: {e}")
-                self.disconnected.emit()
-                break
-
-        self.client_socket.close()
-        print("[CLIENT] Thread de escuta encerrada.")
-
-
-class ChatClient:
-    def __init__(self, port, chat_widget=None, nome_usuario="Usuário"):
-        self.host = obter_gateway()
-        self.port = port
-        self.chat_widget = chat_widget
-        self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.nome_usuario = nome_usuario
-        self.worker = None
-        self.thread = None
-
-    def connect(self):
-        if not self.host:
-            print("[CLIENT] Gateway não encontrado, verifique sua rede.")
-            return
-
-        try:
-            self.client_socket.connect((self.host, self.port))
-            print(f"[CLIENT] Conectado ao servidor em {self.host}:{self.port}")
-
-            # Envia o nome de usuário APÓS a conexão ser estabelecida,
-            # mas antes de iniciar o worker de escuta, para que o servidor
-            # possa identificar o cliente.
-            self.client_socket.sendall(f"__USERNAME__:{self.nome_usuario}\n".encode())
-
-            self.worker = ChatClientWorker(self.client_socket)
-            self.thread = threading.Thread(target=self.worker.listen_for_messages, daemon=True)
-
-            self.thread.start()
-        except Exception as e:
-            print(f"[CLIENT] Erro ao estabelecer conexão: {e}")
-            if self.chat_widget:
-                self.chat_widget.add_message_to_chat(f"[CLIENT] Erro ao conectar: {e}")
-
-            if self.worker:
-                self.worker.disconnected.emit()
+            if handler._running:
+                print(f"[Servidor] Enviando mensagem do host para {handler.username} ({handler.addr})...")
+                handler.send_to_client(message_with_prefix)
+                print(f"[Servidor] Mensagem enviada com sucesso para {handler.username} ({handler.addr}).")
             else:
-                pass
-
-    def send_message(self, message):
-        try:
-            if not self.client_socket:
-                raise Exception("[CLIENT] Socket não inicializado.")
-
-            self.client_socket.sendall((message + "\n").encode())
+                print(f"[Servidor] Handler para {handler.username} ({handler.addr}) não está rodando, pulando.")
         except Exception as e:
-            print(f"[CLIENT] Erro ao enviar mensagem: {e}")
-            if self.chat_widget:
-                self.chat_widget.add_message_to_chat(f"[CLIENT] Erro ao enviar: {e}")
-            raise
+            print(f"[Servidor] ERRO CRÍTICO no broadcast para {handler.username} ({handler.addr}): {e}")
 
-    def disconnect(self):
-        if self.worker:
-            self.worker.stop()
-        print("[CLIENT] Cliente desconectado.")
+def start_server(chat_widget_instance, port): 
+    print("[Servidor] Iniciando servidor de chat...")
+
+    with clientes_lock:
+        handlers.clear()
+
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+    host = '0.0.0.0'
+
+    try:
+        server_socket.bind((host, port))
+        server_socket.listen(5)
+        server_socket.settimeout(1.0) # Adicionar timeout para poder verificar 'running'
+
+        print(f"[Servidor] Servidor de chat escutando em {host}:{port}")
+
+        if chat_widget_instance:
+            chat_widget_instance.add_message_to_chat(f"Servidor de chat iniciado em {host}:{port}")
+
+        # Adicionar uma flag para controlar o loop do servidor de chat
+        global chat_server_running
+        chat_server_running = True
+
+        while chat_server_running: # Usar a flag para controlar o loop
+            try:
+                conn, addr = server_socket.accept()
+                client_ip = addr[0]
+                print(f"[Servidor] Tentativa de conexão de {addr}")
+
+                with authenticated_ips_lock:
+                    if client_ip in authenticated_ips:
+                        print(f"[Servidor] IP {client_ip} autenticado. Aceitando conexão.")
+                        # Enviar uma mensagem de sucesso para o cliente de chat, se necessário,
+                        # antes de iniciar o handler. O ClientHandler já envia o username.
+                        # conn.sendall("AUTH_CHAT_SUCCESS\n".encode()) # Opcional, se o cliente precisar de confirmação imediata
+                        
+                        handler = ClientHandler(conn, addr)
+
+                        thread = threading.Thread(target=handler.run, daemon=True)
+
+                        if chat_widget_instance:
+                            handler.new_message_for_host.connect(chat_widget_instance.add_message_to_chat)
+                            handler.client_status_for_host.connect(chat_widget_instance.add_message_to_chat)
+
+                        thread.start()
+                    else:
+                        print(f"[Servidor] IP {client_ip} NÃO autenticado. Negando conexão.")
+                        conn.sendall("AUTH_REQUIRED\n".encode()) # Informar ao cliente que a autenticação é necessária
+                        conn.close()
+
+            except socket.timeout:
+                # Timeout é normal, permite que o loop verifique a flag chat_server_running
+                pass
+            except Exception as e:
+                print(f"[Servidor] Erro ao aceitar conexão: {e}")
+
+    except Exception as e:
+        print(f"[Servidor] Erro fatal no servidor: {e}")
+        if chat_widget_instance:
+            chat_widget_instance.add_message_to_chat(f"Erro no servidor: {e}")
+    finally:
+        server_socket.close()
+        print("[Servidor] Servidor de chat encerrado.")
+
+# Função para parar o servidor de chat
+def stop_chat_server():
+    global chat_server_running
+    chat_server_running = False
+    print("[Servidor] Sinal para encerrar servidor de chat enviado.")
