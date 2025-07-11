@@ -1,9 +1,12 @@
 import socket
 import threading
-from src.core.chat.globals import clientes_lock, handlers, authenticated_ips, authenticated_ips_lock # Importar a lista e o lock
-from src.core.chat.client_handler import ClientHandler 
+from src.core.chat.globals import clientes_lock, handlers, authenticated_ips, authenticated_ips_lock, encryption_keys, encryption_keys_lock
+from src.core.chat.client_handler import ClientHandler
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.backends import default_backend
+import os # Para gerar nonce no broadcast
 
-def broadcast_from_host(message: str, chat_widget_instance): 
+def broadcast_from_host(message: str, chat_widget_instance):
     if not message:
         return
 
@@ -17,18 +20,33 @@ def broadcast_from_host(message: str, chat_widget_instance):
 
     for handler in current_handlers:
         try:
-            if handler._running:
-                handler.send_to_client(message_with_prefix)
+            # Verificar se a chave compartilhada foi estabelecida para este handler
+            if handler._running and handler.shared_key:
+                # Gerar um nonce para esta mensagem de broadcast
+                nonce = os.urandom(12)
+                encryptor = Cipher(
+                    algorithms.AES(handler.shared_key),
+                    modes.GCM(nonce),
+                    backend=default_backend()
+                ).encryptor()
+                ciphertext = encryptor.update(message_with_prefix.encode('utf-8')) + encryptor.finalize()
+                tag = encryptor.tag
+                encrypted_data = nonce + tag + ciphertext
+                handler.client_socket.sendall(encrypted_data)
+            elif handler._running:
+                print(f"[ChatServer] Handler para {handler.username} ({handler.addr}) não tem chave estabelecida, pulando broadcast.")
             else:
                 print(f"[ChatServer] Handler para {handler.username} ({handler.addr}) não está rodando, pulando.")
         except Exception as e:
             print(f"[ChatServer] ERRO CRÍTICO no broadcast para {handler.username} ({handler.addr}): {e}")
 
-def start_server(chat_widget_instance, port): 
+def start_server(chat_widget_instance, port):
     print("[ChatServer] Iniciando servidor de chat...")
 
     with clientes_lock:
         handlers.clear()
+    with encryption_keys_lock: # Limpar chaves de criptografia ao iniciar o servidor
+        encryption_keys.clear()
 
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -38,7 +56,7 @@ def start_server(chat_widget_instance, port):
     try:
         server_socket.bind((host, port))
         server_socket.listen(5)
-        server_socket.settimeout(1.0) 
+        server_socket.settimeout(1.0)
         print(f"[ChatServer] Servidor de chat escutando em {host}:{port}")
 
         if chat_widget_instance:
@@ -47,7 +65,7 @@ def start_server(chat_widget_instance, port):
         global chat_server_running
         chat_server_running = True
 
-        while chat_server_running: 
+        while chat_server_running:
             try:
                 conn, addr = server_socket.accept()
                 client_ip = addr[0]
@@ -56,7 +74,7 @@ def start_server(chat_widget_instance, port):
                 with authenticated_ips_lock:
                     if client_ip in authenticated_ips:
                         print(f"[ChatServer] IP {client_ip} autenticado. Aceitando conexão.")
-                        
+
                         handler = ClientHandler(conn, addr)
 
                         thread = threading.Thread(target=handler.run, daemon=True)
@@ -68,7 +86,7 @@ def start_server(chat_widget_instance, port):
                         thread.start()
                     else:
                         print(f"[ChatServer] IP {client_ip} NÃO autenticado. Negando conexão.")
-                        conn.sendall("AUTH_REQUIRED\n".encode()) 
+                        conn.sendall("AUTH_REQUIRED\n".encode())
                         conn.close()
 
             except socket.timeout:
