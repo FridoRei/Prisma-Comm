@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (QMainWindow, QDialog, QLabel, QPushButton, QVBoxLayout, QLineEdit, QHBoxLayout, QMessageBox, QSizePolicy, QSpacerItem, QWidget, QTextEdit)
 from PySide6.QtCore import Slot, Qt, QObject, Signal
 from PySide6.QtGui import QFont
-
+import sys
 from src.gui.main_window_ui import MainWindowUI 
 from src.gui.chat_widget import ChatWidget 
 from src.services.app_service import AppService 
@@ -23,7 +23,10 @@ class MainWindow(QMainWindow):
         self.chat_widget_instance = None
         self.is_connected_to_chat = False
 
-        self.app_service = AppService(self)
+        self.original_stdout = None
+        self.original_stderr = None
+
+        self.app_service = None
 
         self.btn_home.clicked.connect(self.show_home_page)
         self.btn_settings.clicked.connect(self.show_settings_page)
@@ -41,6 +44,12 @@ class MainWindow(QMainWindow):
         self.comm_port_entry.setText(str(self.comm_port))
 
         self.show_home_page()
+
+    def set_original_streams(self, stdout, stderr):
+        self.original_stdout = stdout
+        self.original_stderr = stderr
+        # Agora que temos os streams originais, podemos criar o AppService
+        self.app_service = AppService(self, self.original_stdout, self.original_stderr)
 
     @Slot(str)
     def append_log_message(self, message):

@@ -6,9 +6,11 @@ import time
 from src.config.settings import DEFAULT_AUTH_PORT
 
 class AuthService:
-    def __init__(self, auth_port=DEFAULT_AUTH_PORT):
+    def __init__(self, auth_port=DEFAULT_AUTH_PORT, original_stdout=sys.stdout, original_stderr=sys.stderr):
         self.auth_port = auth_port
         self.auth_server_process = None
+        self.original_stdout = original_stdout 
+        self.original_stderr = original_stderr
 
     def start_server(self):
         if self.auth_server_process and self.auth_server_process.poll() is None:
@@ -21,13 +23,11 @@ class AuthService:
             
             if not os.path.exists(server_script_path):
                 raise FileNotFoundError(f"O script do servidor 'server.py' não foi encontrado em: {server_script_path}")
-
-            print(f"[AUTH_SERVICE] Tentando iniciar o script do servidor: {server_script_path}")
             
             self.auth_server_process = subprocess.Popen(
                 [sys.executable, '-m', 'src.services.server', str(self.auth_port)],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                stdout=self.original_stdout,
+                stderr=self.original_stdout,
                 preexec_fn=os.setsid,
                 cwd=os.path.dirname(os.path.dirname(current_dir))  
             )

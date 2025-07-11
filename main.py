@@ -21,6 +21,7 @@ if __name__ == "__main__":
 
     original_stdout = sys.stdout
     original_stderr = sys.stderr
+    win.set_original_streams(original_stdout, original_stderr) 
     console_redirector = ConsoleOutputRedirector(original_stdout, original_stderr)
     console_redirector.output_written.connect(win.append_log_message)
     sys.stdout = console_redirector

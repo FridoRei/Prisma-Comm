@@ -13,13 +13,13 @@ if len(sys.argv) > 1:
     try:
         PORT = int(sys.argv[1])
     except ValueError:
-        print(f"[SERVIDOR] Aviso: Porta inválida fornecida '{sys.argv[1]}'. Usando porta padrão {PORT}.")
+        print(f"[SERVER-AUTH] Aviso: Porta inválida fornecida '{sys.argv[1]}'. Usando porta padrão {PORT}.")
 
 running = True
 
 def signal_handler(signum, frame):
     global running
-    print(f"\n[SERVIDOR] Sinal {signum} recebido. Encerrando servidor de autenticação...")
+    print(f"\n[SERVER-AUTH] Sinal {signum} recebido. Encerrando servidor de autenticação...")
     running = False
 
 signal.signal(signal.SIGTERM, signal_handler)
@@ -32,55 +32,55 @@ try:
     server_socket.listen(1)
     server_socket.settimeout(1.0) 
 
-    print(f"Esperando por uma conexão na porta {PORT}...")
+    print(f"[SERVER-AUTH] Esperando por uma conexão na porta {PORT}...")
 
     while running: 
         conn = None 
         try:
             conn, addr = server_socket.accept()
-            print(f"\nConexão recebida de {addr}")
+            print(f"\n[SERVER-AUTH] Conexão recebida de {addr}")
             resposta = "AUTH_FAILURE"
 
             try:
                 token_recebido_bytes = conn.recv(1024)
                 if not token_recebido_bytes:
-                    print("[SERVIDOR] Cliente desconectou antes de enviar o token.")
+                    print("[SERVER-AUTH] Cliente desconectou antes de enviar o token.")
                     continue
 
                 token_recebido = token_recebido_bytes.decode('utf-8').strip()
-                print(f"[SERVIDOR] Token (hash bcrypt) recebido do cliente: {token_recebido}")
+                print(f"[SERVER-AUTH] Token (hash bcrypt) recebido do cliente: {token_recebido}")
 
                 palavra_base_local_servidor = calcular_palavra_base()
-                print(f"[SERVIDOR] Palavra base calculada pelo servidor (para depuração): {palavra_base_local_servidor}")
+                print(f"[SERVER-AUTH] Palavra base calculada pelo servidor (para depuração): {palavra_base_local_servidor}")
 
                 if validar_token(token_recebido, addr):
-                    print("[SERVIDOR] Token VALIDADO com sucesso!")
+                    print("[SERVER-AUTH] Token VALIDADO com sucesso!")
                     resposta = "AUTH_SUCCESS"
                 else:
-                    print("[SERVIDOR] Token INVÁLIDO. Desencontro ou palavra base incorreta.")
+                    print("[SERVER-AUTH] Token INVÁLIDO. Desencontro ou palavra base incorreta.")
                     resposta = "AUTH_FAILURE_INVALID_TOKEN"
 
             except socket.timeout:
-                print("[SERVIDOR] Timeout ao receber token do cliente.")
+                print("[SERVER-AUTH] Timeout ao receber token do cliente.")
                 resposta = "AUTH_FAILURE_TIMEOUT"
             except Exception as e:
-                print(f"[SERVIDOR] Erro ao processar conexão de autenticação: {e}")
+                print(f"[SERVER-AUTH] Erro ao processar conexão de autenticação: {e}")
                 resposta = f"AUTH_FAILURE_ERROR: {str(e)}"
             finally:
                 if conn: 
                     conn.sendall(resposta.encode('utf-8'))
                     conn.close()
-                    print(f"[SERVIDOR] Resposta enviada ao cliente {addr}: {resposta}")
+                    print(f"[SERVER-AUTH] Resposta enviada ao cliente {addr}: {resposta}")
 
         except socket.timeout:
             pass
         except Exception as e:
             if running: 
-                print(f"[SERVIDOR] Erro ao aceitar conexão: {e}")
+                print(f"[SERVER-AUTH] Erro ao aceitar conexão: {e}")
 
 except Exception as e:
-    print(f"[SERVIDOR] Erro fatal no servidor: {e}")
+    print(f"[SERVER-AUTH] Erro fatal no servidor: {e}")
 finally:
     server_socket.close()
-    print("[SERVIDOR] Servidor de autenticação encerrado.")
+    print("[SERVER-AUTH] Servidor de autenticação encerrado.")
 

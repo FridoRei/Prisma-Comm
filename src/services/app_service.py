@@ -9,9 +9,9 @@ from src.gui.dialogs import WifiInterfaceSelectionDialog, HotspotConfigDialog
 from src.config.settings import DEFAULT_USERNAME, DEFAULT_AUTH_PORT, DEFAULT_COMM_PORT
 
 class AppService:
-    def __init__(self, main_window_instance):
+    def __init__(self, main_window_instance, original_stdout, original_stderr):
         self.main_window = main_window_instance
-        self.auth_service = AuthService(self.main_window.auth_port)
+        self.auth_service = AuthService(self.main_window.auth_port, original_stdout, original_stderr)
         self.chat_client_instance = None
         self.chat_server_thread = None
         self.is_connected_to_chat = False
