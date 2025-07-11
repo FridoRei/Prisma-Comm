@@ -7,7 +7,8 @@ from src.core.chat.chat_server import start_server, broadcast_from_host
 from src.services.auth_service import AuthService
 from src.gui.dialogs import WifiInterfaceSelectionDialog, HotspotConfigDialog
 from src.config.settings import DEFAULT_USERNAME, DEFAULT_AUTH_PORT, DEFAULT_COMM_PORT
-from src.core.chat.globals import authenticated_ips, authenticated_ips_lock, encryption_keys, encryption_keys_lock # Importar encryption_keys
+from src.core.chat.globals import authenticated_ips, authenticated_ips_lock
+import socket
 
 class AppService:
     def __init__(self, main_window_instance, original_stdout, original_stderr):
@@ -47,7 +48,7 @@ class AppService:
                     self.show_dialog("Hotspot criado", f"SSID: {ssid}\nSenha: {password}")
 
                     self.auth_service.start_server()
-
+                    
                     host_ip = obter_gateway()
                     if host_ip:
                         with authenticated_ips_lock:
@@ -132,10 +133,8 @@ class AppService:
         self.auth_service.stop_server()
         self.disconnect_chat_client()
         print("[AppService] Shutdown de serviços concluído.")
-
+        
         with authenticated_ips_lock:
             authenticated_ips.clear()
             print("[AppService] Lista de IPs autenticados limpa.")
-        with encryption_keys_lock: # Limpar chaves de criptografia no shutdown
-            encryption_keys.clear()
-            print("[AppService] Lista de chaves de criptografia limpa.")
+
