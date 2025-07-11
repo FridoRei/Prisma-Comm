@@ -37,8 +37,7 @@ def run_auth_server(auth_port, stop_event):
                 conn.close()
 
             except socket.timeout:
-                print("[SERVER-AUTH] Timeout ao receber token do cliente.")
-                resposta = "AUTH_FAILURE_TIMEOUT" 
+                continue 
             except Exception as e:
                 print(f"[AuthServer] Erro durante conexão: {str(e)}")
                 if 'conn' in locals():
