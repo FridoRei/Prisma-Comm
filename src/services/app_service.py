@@ -7,6 +7,8 @@ from src.core.chat.chat_server import start_server, broadcast_from_host
 from src.services.auth_service import AuthService
 from src.gui.dialogs import WifiInterfaceSelectionDialog, HotspotConfigDialog
 from src.config.settings import DEFAULT_USERNAME, DEFAULT_AUTH_PORT, DEFAULT_COMM_PORT
+from src.core.chat.globals import authenticated_ips, authenticated_ips_lock
+import socket
 
 class AppService:
     def __init__(self, main_window_instance, original_stdout, original_stderr):
@@ -46,6 +48,12 @@ class AppService:
                     self.show_dialog("Hotspot criado", f"SSID: {ssid}\nSenha: {password}")
 
                     self.auth_service.start_server()
+                    
+                    host_ip = obter_gateway()
+                    if host_ip:
+                        with authenticated_ips_lock:
+                            authenticated_ips.add(host_ip)
+                            print(f"[AppService] IP do Host ({host_ip}) adicionado à lista de IPs autenticados. Lista atual: {authenticated_ips}")
 
                     self.main_window.setup_chat_widget(is_host=True)
                     self.is_connected_to_chat = True
@@ -68,7 +76,7 @@ class AppService:
 
     def handle_join_clicked(self, username):
         if verificar_conexao_com_host(porta=self.main_window.auth_port):
-            print("Você está conectado ao host correto!")
+            print("[AppService] Você está conectado ao host correto!")
             self.join_hotspot_chat(username)
         else:
             self.show_dialog("Erro", "Não foi possível verificar a autenticidade do host. Verifique a conexão e as portas.")
@@ -125,4 +133,8 @@ class AppService:
         self.auth_service.stop_server()
         self.disconnect_chat_client()
         print("[AppService] Shutdown de serviços concluído.")
+        
+        with authenticated_ips_lock:
+            authenticated_ips.clear()
+            print("[AppService] Lista de IPs autenticados limpa.")
 

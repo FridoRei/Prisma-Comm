@@ -22,7 +22,6 @@ def verificar_conexao_com_host(porta):
 
     try:
         with socket.create_connection((gateway, porta), timeout=5) as sock: 
-            palavra_base_cliente = calcular_palavra_base()
 
             token_para_envio = gerar_token() 
             if not token_para_envio:

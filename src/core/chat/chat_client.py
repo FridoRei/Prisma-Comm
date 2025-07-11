@@ -1,4 +1,3 @@
-# src/core/chat/chat_client.py
 import socket
 import threading
 from PySide6.QtCore import QObject, Signal, Slot
