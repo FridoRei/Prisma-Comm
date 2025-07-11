@@ -1,89 +1,50 @@
 import socket
-import subprocess
-import os
-import signal
+import threading
 import time
-import sys 
-from src.core.auth.token_manager import gerar_token, validar_token, calcular_palavra_base 
+from src.core.auth.token_manager import validar_token
 from src.core.chat.globals import authenticated_ips, authenticated_ips_lock
 
-HOST = '0.0.0.0'
-PORT = 20556 
-
-if len(sys.argv) > 1:
+def run_auth_server(auth_port, stop_event):
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    server_socket.settimeout(1.0)  
+    
     try:
-        PORT = int(sys.argv[1])
-    except ValueError:
-        print(f"[SERVER-AUTH] Aviso: Porta inválida fornecida '{sys.argv[1]}'. Usando porta padrão {PORT}.")
+        server_socket.bind(('0.0.0.0', auth_port))
+        server_socket.listen(5)
+        print(f"[AuthServer] Servidor de autenticação iniciado na porta {auth_port}")
 
-running = True
-
-def signal_handler(signum, frame):
-    global running
-    print(f"\n[SERVER-AUTH] Sinal {signum} recebido. Encerrando servidor de autenticação...")
-    running = False
-
-signal.signal(signal.SIGTERM, signal_handler)
-
-server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-
-try:
-    server_socket.bind((HOST, PORT))
-    server_socket.listen(1)
-    server_socket.settimeout(1.0) 
-
-    print(f"[SERVER-AUTH] Esperando por uma conexão na porta {PORT}...")
-
-    while running: 
-        conn = None 
-        try:
-            conn, addr = server_socket.accept()
-            print(f"\n[SERVER-AUTH] Conexão recebida de {addr}")
-            client_ip = addr[0]
-            resposta = "AUTH_FAILURE"
-
+        while not stop_event.is_set():
             try:
-                token_recebido_bytes = conn.recv(1024)
-                if not token_recebido_bytes:
-                    print("[SERVER-AUTH] Cliente desconectou antes de enviar o token.")
+                conn, addr = server_socket.accept()
+                client_ip = addr[0]
+                
+                token_recebido = conn.recv(1024).decode('utf-8').strip()
+                if not token_recebido:
+                    conn.close()
                     continue
 
-                token_recebido = token_recebido_bytes.decode('utf-8').strip()
-                print(f"[SERVER-AUTH] Token (hash bcrypt) recebido do cliente: {token_recebido}")
-
-                palavra_base_local_servidor = calcular_palavra_base()
-                print(f"[SERVER-AUTH] Palavra base calculada pelo servidor (para depuração): {palavra_base_local_servidor}")
-
                 if validar_token(token_recebido, addr):
-                    authenticated_ips.add(client_ip)
-                    print(f"[SERVER-AUTH] IP {client_ip} adicionado à lista de IPs autenticados. Lista atual: {authenticated_ips}")
+                    with authenticated_ips_lock:
+                        authenticated_ips.add(client_ip)
+                    print(f"[AuthServer] IP {client_ip} autenticado. Lista atual: {authenticated_ips}")
                     resposta = "AUTH_SUCCESS"
                 else:
-                    print("[SERVER-AUTH] Token INVÁLIDO. Desencontro ou palavra base incorreta.")
-                    resposta = "AUTH_FAILURE_INVALID_TOKEN"
+                    print("[AuthServer] Token inválido")
+                    resposta = "AUTH_FAILURE"
+
+                conn.sendall(resposta.encode('utf-8'))
+                conn.close()
 
             except socket.timeout:
-                print("[SERVER-AUTH] Timeout ao receber token do cliente.")
-                resposta = "AUTH_FAILURE_TIMEOUT"
+                continue 
             except Exception as e:
-                print(f"[SERVER-AUTH] Erro ao processar conexão de autenticação: {e}")
-                resposta = f"AUTH_FAILURE_ERROR: {str(e)}"
-            finally:
-                if conn: 
-                    conn.sendall(resposta.encode('utf-8'))
+                print(f"[AuthServer] Erro durante conexão: {str(e)}")
+                if 'conn' in locals():
                     conn.close()
-                    print(f"[SERVER-AUTH] Resposta enviada ao cliente {addr}: {resposta}")
 
-        except socket.timeout:
-            pass
-        except Exception as e:
-            if running: 
-                print(f"[SERVER-AUTH] Erro ao aceitar conexão: {e}")
-
-except Exception as e:
-    print(f"[SERVER-AUTH] Erro fatal no servidor: {e}")
-finally:
-    server_socket.close()
-    print("[SERVER-AUTH] Servidor de autenticação encerrado.")
-
+    except Exception as e:
+        print(f"[AuthServer] Erro fatal: {str(e)}")
+    finally:
+        server_socket.close()
+        print("[AuthServer] Servidor encerrado")

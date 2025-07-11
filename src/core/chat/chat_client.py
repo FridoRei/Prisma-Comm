@@ -29,7 +29,7 @@ class ChatClientWorker(QObject):
             try:
                 message = self.client_socket.recv(1024).decode()
                 if message:
-                    if message == "AUTH_REQUIRED": # Adicionar tratamento para AUTH_REQUIRED
+                    if message == "AUTH_REQUIRED":
                         self.connection_error.emit("[CLIENT] Conexão recusada: Autenticação necessária. Por favor, autentique-se primeiro.")
                         self.disconnected.emit()
                         break
@@ -67,9 +67,6 @@ class ChatClient:
             self.client_socket.connect((self.host, self.port))
             print(f"[CLIENT] Conectado ao servidor em {self.host}:{self.port}")
 
-            # Envia o nome de usuário APÓS a conexão ser estabelecida,
-            # mas antes de iniciar o worker de escuta, para que o servidor
-            # possa identificar o cliente.
             self.client_socket.sendall(f"__USERNAME__:{self.nome_usuario}\n".encode())
 
             self.worker = ChatClientWorker(self.client_socket)
