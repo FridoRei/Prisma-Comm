@@ -46,7 +46,6 @@ class AppService:
         with authenticated_ips_lock:
             for ip in ips_locais: 
                 authenticated_ips.add(ip)
-            print(f"[AppService] IPs do Host ({', '.join(ips_locais)}) adicionados à lista de IPs autenticados. Lista atual: {authenticated_ips}")
 
         self.chat_server_thread = threading.Thread(
             target=start_server,

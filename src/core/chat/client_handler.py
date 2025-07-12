@@ -72,7 +72,6 @@ class ClientHandler(QObject):
             with authenticated_ips_lock:
                 if client_ip in authenticated_ips:
                     authenticated_ips.remove(client_ip)
-                    print(f"[ClientHandler] IP {client_ip} removido da lista de IPs autenticados. Lista atual: {authenticated_ips}")
 
             self.client_socket.close()
             self.client_status_for_host.emit(f"[ClientHandler] Cliente '{self.username}' desconectado.")
