@@ -68,7 +68,6 @@ class AppService:
                 self.show_dialog("Erro", "Endereço IP inválido.")
                 return
             if verificar_conexao_com_host(server_ip_to_use, self.main_window.auth_port):
-                print(f"[AppService] Conexão estabelecida com {server_ip_to_use}!")
                 self.join_hotspot_chat(server_ip_to_use, username)
             else:
                 self.show_dialog("Erro", f"Falha na conexão com {server_ip_to_use}")
