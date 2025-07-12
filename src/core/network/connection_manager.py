@@ -46,3 +46,15 @@ def verificar_conexao_com_host(porta):
         print(f"[ERRO] Falha na conexão com o host de autenticação: {e}") 
     return False
 
+def obter_gateway_generico():
+    gateways = []
+    try:
+        hostname = socket.gethostname()
+        info = socket.getaddrinfo(hostname, None, socket.AF_INET, socket.SOCK_STREAM, 0, socket.AI_PASSIVE)
+        for res in info:
+            ip_address = res[4][0]
+            if ip_address != '127.0.0.1' and ip_address not in gateways:
+                gateways.append(ip_address)
+    except Exception as e:
+        print(f"[ERRO] ao obter IPs locais: {e}")
+    return gateways if gateways else None

@@ -1,14 +1,13 @@
 import threading
-from PySide6.QtWidgets import QMessageBox
-from src.core.network.wifi_manager import detectar_interfaces_wifi, criar_hotspot
-from src.core.network.connection_manager import verificar_conexao_com_host, obter_gateway
+from PySide6.QtWidgets import QMessageBox, QDialog
+from src.core.network.connection_manager import verificar_conexao_com_host, obter_gateway, obter_gateway_generico 
 from src.core.chat.chat_client import ChatClient
 from src.core.chat.chat_server import start_server, broadcast_from_host
 from src.services.auth_service import AuthService
-from src.gui.dialogs import WifiInterfaceSelectionDialog, HotspotConfigDialog
 from src.config.settings import DEFAULT_USERNAME, DEFAULT_AUTH_PORT, DEFAULT_COMM_PORT
 from src.core.chat.globals import authenticated_ips, authenticated_ips_lock
 import socket
+from src.gui.dialogs import JoinOptionDialog 
 
 class AppService:
     def __init__(self, main_window_instance, original_stdout, original_stderr):
@@ -26,72 +25,94 @@ class AppService:
         msg.exec()
 
     def handle_host_clicked(self):
-        interfaces = detectar_interfaces_wifi()
-        if not interfaces:
-            self.show_dialog("Erro", "Nenhuma interface Wi-Fi encontrada.")
-            return
-
-        iface_dialog = WifiInterfaceSelectionDialog(self.main_window)
-        if iface_dialog.exec() == WifiInterfaceSelectionDialog.Accepted:
-            selected_interface = iface_dialog.selected_interface
-            if not selected_interface:
-                self.show_dialog("Erro", "Nenhuma interface selecionada.")
-                return
-
-            hotspot_dialog = HotspotConfigDialog(self.main_window)
-            if hotspot_dialog.exec() == HotspotConfigDialog.Accepted:
-                ssid = hotspot_dialog.ssid
-                password = hotspot_dialog.password
-
-                try:
-                    criar_hotspot(selected_interface, ssid, password)
-                    self.show_dialog("Hotspot criado", f"SSID: {ssid}\nSenha: {password}")
-
-                    self.auth_service.start_server()
-                    
-                    host_ip = obter_gateway()
-                    if host_ip:
-                        with authenticated_ips_lock:
-                            authenticated_ips.add(host_ip)
-                            print(f"[AppService] IP do Host ({host_ip}) adicionado à lista de IPs autenticados. Lista atual: {authenticated_ips}")
-
-                    self.main_window.setup_chat_widget(is_host=True)
-                    self.is_connected_to_chat = True
-                    self.main_window.show_chat_page()
-
-                    self.chat_server_thread = threading.Thread(
-                        target=start_server,
-                        args=(self.main_window.chat_widget_instance, self.main_window.comm_port),
-                        daemon=True
-                    )
-                    self.chat_server_thread.start()
-
-                except Exception as e:
-                    self.show_dialog("Erro", f"Não foi possível criar o hotspot ou iniciar serviços: {e}")
-                    print(f"[AppService] Erro ao hospedar: {e}")
-            else:
-                self.show_dialog("Cancelado", "Criação do hotspot cancelada.")
+        self.auth_service.start_server()
+        
+        self.main_window.setup_chat_widget(is_host=True)
+        self.is_connected_to_chat = True
+        
+        ips_locais = obter_gateway_generico()         
+        if ips_locais:
+            ips_str = ", ".join(ips_locais)
+            self.main_window.show_dialog("Servidor Iniciado", 
+                                          f"Servidor de autenticação e chat iniciados.\n"
+                                          f"Compartilhe o seguinte IP com os clientes:\n"
+                                          f"{ips_str}\n" 
+                                          f"Porta de Autenticação: {self.main_window.auth_port}\n"
+                                          f"Porta de Comunicação: {self.main_window.comm_port}")
         else:
-            self.show_dialog("Cancelado", "Seleção de interface cancelada.")
+            self.main_window.show_dialog("Erro", "Não foi possível obter o IP local. Verifique sua conexão de rede.")
+            ips_locais = ['127.0.0.1'] 
+
+        with authenticated_ips_lock:
+            for ip in ips_locais: 
+                authenticated_ips.add(ip)
+            print(f"[AppService] IPs do Host ({', '.join(ips_locais)}) adicionados à lista de IPs autenticados. Lista atual: {authenticated_ips}")
+
+        self.chat_server_thread = threading.Thread(
+            target=start_server,
+            args=(self.main_window.chat_widget_instance, self.main_window.comm_port),
+            daemon=True
+        )
+        self.chat_server_thread.start()
 
     def handle_join_clicked(self, username):
-        if verificar_conexao_com_host(porta=self.main_window.auth_port):
-            print("[AppService] Você está conectado ao host correto!")
-            self.join_hotspot_chat(username)
-        else:
-            self.show_dialog("Erro", "Não foi possível verificar a autenticidade do host. Verifique a conexão e as portas.")
+        join_dialog = JoinOptionDialog(self.main_window)
+        if join_dialog.exec() == QDialog.Accepted:
+            server_ip_to_use = None
+            
+            if join_dialog.use_gateway:
+                server_ip_to_use = obter_gateway()
+                print(f"[DEBUG] Usando gateway: {server_ip_to_use}")
+            else:
+                server_ip_to_use = join_dialog.server_ip
+            if not self.server_ip_to_validate(server_ip_to_use):
+                self.show_dialog("Erro", "Endereço IP inválido.")
+                return
+            if self._verificar_conexao_com_host_com_ip(server_ip_to_use, self.main_window.auth_port):
+                print(f"[AppService] Conexão estabelecida com {server_ip_to_use}!")
+                self.join_hotspot_chat(server_ip_to_use, username)
+            else:
+                self.show_dialog("Erro", f"Falha na conexão com {server_ip_to_use}")
+                
+    def server_ip_to_validate(self, ip):
+        """Valida formato do IP"""
+        try:
+            socket.inet_aton(ip)
+            return True
+        except socket.error:
+            return False
 
-    def join_hotspot_chat(self, username):
-        gateway = obter_gateway()
-        if not gateway:
-            self.show_dialog("Erro", "Não foi possível obter o gateway da rede.")
-            return
+    def _verificar_conexao_com_host_com_ip(self, target_ip, porta):
+        try:
+            with socket.create_connection((target_ip, porta), timeout=5) as sock: 
+                token_para_envio = gerar_token() 
+                if not token_para_envio:
+                    print("[CLIENTE] Erro ao gerar token para envio.")
+                    return False
 
+                sock.sendall(token_para_envio.encode('utf-8')) 
+                resposta_servidor = sock.recv(1024).decode('utf-8').strip()
+
+                if resposta_servidor == "AUTH_SUCCESS": 
+                    return True
+                else: 
+                    print(f"[CLIENTE] Autenticação falhou: {resposta_servidor}")
+                    return False
+
+        except socket.timeout:
+            print(f"[ERRO] Timeout na conexão com o host de autenticação ({target_ip}:{porta}).") 
+        except ConnectionRefusedError:
+            print(f"[ERRO] Conexão recusada pelo host de autenticação ({target_ip}:{porta}). O servidor pode não estar ativo ou a porta está bloqueada.")
+        except Exception as e:
+            print(f"[ERRO] Falha na conexão com o host de autenticação: {e}") 
+        return False
+
+    def join_hotspot_chat(self, server_ip, username): 
         self.disconnect_chat_client()
 
         self.main_window.setup_chat_widget(is_host=False)
 
-        self.chat_client_instance = ChatClient(self.main_window.comm_port, self.main_window.chat_widget_instance, username)
+        self.chat_client_instance = ChatClient(server_ip, self.main_window.comm_port, self.main_window.chat_widget_instance, username)
         self.main_window.chat_widget_instance.client = self.chat_client_instance
 
         self.chat_client_instance.connect()
@@ -137,4 +158,3 @@ class AppService:
         with authenticated_ips_lock:
             authenticated_ips.clear()
             print("[AppService] Lista de IPs autenticados limpa.")
-
