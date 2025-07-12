@@ -1,7 +1,6 @@
 import socket
 import threading
 from PySide6.QtCore import QObject, Signal, Slot
-from src.core.network.connection_manager import obter_gateway
 
 class ChatClientWorker(QObject):
     message_received = Signal(str)
@@ -49,8 +48,8 @@ class ChatClientWorker(QObject):
 
 
 class ChatClient:
-    def __init__(self, port, chat_widget=None, nome_usuario="Usuário"):
-        self.host = obter_gateway()
+    def __init__(self, host_ip, port, chat_widget=None, nome_usuario="Usuário"):
+        self.host = host_ip
         self.port = port
         self.chat_widget = chat_widget
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

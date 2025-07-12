@@ -68,7 +68,7 @@ class AppService:
             if not self.server_ip_to_validate(server_ip_to_use):
                 self.show_dialog("Erro", "Endereço IP inválido.")
                 return
-            if self._verificar_conexao_com_host_com_ip(server_ip_to_use, self.main_window.auth_port):
+            if verificar_conexao_com_host(server_ip_to_use, self.main_window.auth_port):
                 print(f"[AppService] Conexão estabelecida com {server_ip_to_use}!")
                 self.join_hotspot_chat(server_ip_to_use, username)
             else:
@@ -81,31 +81,6 @@ class AppService:
             return True
         except socket.error:
             return False
-
-    def _verificar_conexao_com_host_com_ip(self, target_ip, porta):
-        try:
-            with socket.create_connection((target_ip, porta), timeout=5) as sock: 
-                token_para_envio = gerar_token() 
-                if not token_para_envio:
-                    print("[CLIENTE] Erro ao gerar token para envio.")
-                    return False
-
-                sock.sendall(token_para_envio.encode('utf-8')) 
-                resposta_servidor = sock.recv(1024).decode('utf-8').strip()
-
-                if resposta_servidor == "AUTH_SUCCESS": 
-                    return True
-                else: 
-                    print(f"[CLIENTE] Autenticação falhou: {resposta_servidor}")
-                    return False
-
-        except socket.timeout:
-            print(f"[ERRO] Timeout na conexão com o host de autenticação ({target_ip}:{porta}).") 
-        except ConnectionRefusedError:
-            print(f"[ERRO] Conexão recusada pelo host de autenticação ({target_ip}:{porta}). O servidor pode não estar ativo ou a porta está bloqueada.")
-        except Exception as e:
-            print(f"[ERRO] Falha na conexão com o host de autenticação: {e}") 
-        return False
 
     def join_hotspot_chat(self, server_ip, username): 
         self.disconnect_chat_client()

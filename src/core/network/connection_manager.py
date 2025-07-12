@@ -14,14 +14,13 @@ def obter_gateway():
         print(f"[ERRO] ao obter gateway: {e}")
     return None
 
-def verificar_conexao_com_host(porta):
-    gateway = obter_gateway()
-    if not gateway:
-        print("Gateway não encontrado.")
+def verificar_conexao_com_host(ip, porta):
+    if not ip:
+        print("Endereço não encontrado.")
         return False
 
     try:
-        with socket.create_connection((gateway, porta), timeout=5) as sock: 
+        with socket.create_connection((ip, porta), timeout=5) as sock: 
 
             token_para_envio = gerar_token() 
             if not token_para_envio:
@@ -39,9 +38,9 @@ def verificar_conexao_com_host(porta):
                 return False
 
     except socket.timeout:
-        print(f"[ERRO] Timeout na conexão com o host de autenticação ({gateway}:{porta}).") 
+        print(f"[ERRO] Timeout na conexão com o host de autenticação ({ip}:{porta}).") 
     except ConnectionRefusedError:
-        print(f"[ERRO] Conexão recusada pelo host de autenticação ({gateway}:{porta}). O servidor pode não estar ativo ou a porta está bloqueada.")
+        print(f"[ERRO] Conexão recusada pelo host de autenticação ({ip}:{porta}). O servidor pode não estar ativo ou a porta está bloqueada.")
     except Exception as e:
         print(f"[ERRO] Falha na conexão com o host de autenticação: {e}") 
     return False
