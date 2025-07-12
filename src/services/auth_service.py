@@ -18,7 +18,6 @@ class AuthService:
             daemon=True
         )
         self.server_thread.start()
-        print("[AUTH-SERVICE] Servidor de autenticação iniciado como thread")
 
     def stop_server(self):
         if self.server_thread and self.server_thread.is_alive():

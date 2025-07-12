@@ -66,7 +66,6 @@ class ClientHandler(QObject):
             with clientes_lock:
                 if self in handlers:
                     handlers.remove(self) 
-                    print(f"[ClientHandler] Handler removido para {self.username} ({self.addr})")
                     
             client_ip = self.addr[0]
             with authenticated_ips_lock:
@@ -75,8 +74,6 @@ class ClientHandler(QObject):
 
             self.client_socket.close()
             self.client_status_for_host.emit(f"[ClientHandler] Cliente '{self.username}' desconectado.")
-            print(f"[ClientHandler] Conexão encerrada com {self.username} ({self.addr})")
-
     def send_to_client(self, message: str): 
         try:
             if self._running:
