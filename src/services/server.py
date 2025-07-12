@@ -24,10 +24,10 @@ def run_auth_server(auth_port, stop_event):
                     conn.close()
                     continue
 
-                if validar_token(token_recebido, addr):
+                if validar_token(token_recebido):
                     with authenticated_ips_lock:
                         authenticated_ips.add(client_ip)
-                    print(f"[AuthServer] IP {client_ip} autenticado. Lista atual: {authenticated_ips}")
+                    print(f"[AuthServer] IP {client_ip} autenticado.")
                     resposta = "AUTH_SUCCESS"
                 else:
                     print("[AuthServer] Token inválido")

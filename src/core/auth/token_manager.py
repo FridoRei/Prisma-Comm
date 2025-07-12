@@ -38,11 +38,10 @@ def gerar_token():
         print(f"[TokenManager] Erro ao gerar token: {e}")
         return None
 
-def validar_token(client_token, addr):
+def validar_token(client_token):
     try:
         palavra_base_local = calcular_palavra_base()
         result = bcrypt.checkpw(palavra_base_local.encode("utf-8"), client_token.encode("utf-8"))
-        print(f"[SERVIDOR] Tentativa de verificação de {addr}: {result}")
         return result
     except Exception as e:
         return False
