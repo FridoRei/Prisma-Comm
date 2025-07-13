@@ -16,7 +16,6 @@ def handle_public_key_request(conn, addr):
         
         if public_key_bytes:
             conn.sendall(public_key_bytes)
-            print(f"[AuthServer] Chave pública efêmera enviada para {addr}")
         else:
             conn.sendall(b"ERROR: Public key not available")
             print(f"[AuthServer] Erro: Chave pública não disponível para {addr}")
@@ -36,7 +35,7 @@ def run_auth_server(auth_port, stop_event):
     tcp_server_socket.listen(1)
     tcp_server_socket.settimeout(1.0)
 
-    print(f"[AuthServer] Servidor de autenticação (UDP) e chave pública (TCP) iniciado na porta {auth_port}")
+    print(f"[AuthServer] Servidor de autenticação iniciado na porta {auth_port}")
 
     while not stop_event.is_set():
         try:
@@ -47,7 +46,6 @@ def run_auth_server(auth_port, stop_event):
 
         try:
             encrypted_token, addr = udp_server_socket.recvfrom(256)
-            print(f"[AuthServer] Recebido datagrama UDP de {addr}")
             try:
                 token = rsa_manager_instance.decrypt_token(encrypted_token)
                 if validar_token(token):
@@ -63,7 +61,6 @@ def run_auth_server(auth_port, stop_event):
                 udp_server_socket.sendto(b"AUTH_FAILURE", addr)
             finally:
                 rsa_manager_instance.clear_keys()
-                print(f"[AuthServer] Chaves efêmeras limpas após processar requisição de {addr}.")
 
         except socket.timeout:
             pass

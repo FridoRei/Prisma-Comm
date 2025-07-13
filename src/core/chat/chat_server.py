@@ -52,7 +52,7 @@ def start_server(chat_widget_instance, port):
 
                 with authenticated_ips_lock:
                     if client_ip in authenticated_ips:
-                        print(f"[ChatServer] IP {client_ip} autenticado. Aceitando conexão.")
+                        print(f"[ChatServer] Conexão de {client_ip} aceita.")
                         
                         handler = ClientHandler(conn, addr)
 
@@ -64,7 +64,7 @@ def start_server(chat_widget_instance, port):
 
                         thread.start()
                     else:
-                        print(f"[ChatServer] IP {client_ip} NÃO autenticado. Negando conexão.")
+                        print(f"[ChatServer] Conexão de {client_ip} rejeitada.")
                         conn.sendall("AUTH_REQUIRED\n".encode()) 
                         conn.close()
 
