@@ -4,17 +4,13 @@ import time
 from src.core.auth.token_manager import validar_token
 from src.core.chat.globals import authenticated_ips, authenticated_ips_lock
 from src.core.auth.rsa_manager import RSAManager
-
-# Instância única do RSAManager para o servidor
 rsa_manager_instance = RSAManager()
 
-# Função para lidar com requisições de chave pública (TCP)
 def handle_public_key_request(conn, addr):
     try:
         print(f"[AuthServer] Requisição de chave pública de {addr}")
         
-        # Gerar um novo par de chaves efêmeras para esta sessão de autenticação
-        rsa_manager_instance.generate_ephemeral_keys()
+        rsa_manager_instance.generate_temp_keys()
         
         public_key_bytes = rsa_manager_instance.get_public_key_bytes() 
         
@@ -30,12 +26,10 @@ def handle_public_key_request(conn, addr):
         conn.close()
 
 def run_auth_server(auth_port, stop_event):
-    # Servidor UDP para autenticação de token
     udp_server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     udp_server_socket.bind(('0.0.0.0', auth_port))
     udp_server_socket.settimeout(1.0)
 
-    # Servidor TCP para troca de chave pública
     tcp_server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     tcp_server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     tcp_server_socket.bind(('0.0.0.0', auth_port))
@@ -45,21 +39,16 @@ def run_auth_server(auth_port, stop_event):
     print(f"[AuthServer] Servidor de autenticação (UDP) e chave pública (TCP) iniciado na porta {auth_port}")
 
     while not stop_event.is_set():
-        # Lidar com conexões TCP (chave pública)
         try:
             tcp_conn, tcp_addr = tcp_server_socket.accept()
-            # Inicia uma nova thread para lidar com a requisição TCP
-            # A geração da chave efêmera agora ocorre dentro de handle_public_key_request
             threading.Thread(target=handle_public_key_request, args=(tcp_conn, tcp_addr), daemon=True).start()
         except socket.timeout:
             pass
 
-        # Lidar com datagramas UDP (autenticação de token)
         try:
             encrypted_token, addr = udp_server_socket.recvfrom(256)
             print(f"[AuthServer] Recebido datagrama UDP de {addr}")
             try:
-                # Descriptografar o token usando a chave privada efêmera atual
                 token = rsa_manager_instance.decrypt_token(encrypted_token)
                 if validar_token(token):
                     with authenticated_ips_lock:
@@ -73,8 +62,6 @@ def run_auth_server(auth_port, stop_event):
                 print(f"[AuthServer] Erro ao descriptografar/validar token de {addr}: {e}")
                 udp_server_socket.sendto(b"AUTH_FAILURE", addr)
             finally:
-                # Limpar as chaves efêmeras após a tentativa de autenticação
-                # Isso garante que a chave privada não persista após o uso.
                 rsa_manager_instance.clear_keys()
                 print(f"[AuthServer] Chaves efêmeras limpas após processar requisição de {addr}.")
 

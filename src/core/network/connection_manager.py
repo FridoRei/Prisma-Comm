@@ -1,4 +1,3 @@
-# src/core/network/connection_manager.py
 import subprocess
 import socket
 from src.core.auth.token_manager import gerar_token
@@ -17,9 +16,6 @@ def obter_gateway():
     return None
 
 def get_server_public_key(server_ip, auth_port):
-    """
-    Solicita a chave pública RSA do servidor via TCP.
-    """
     try:
         with socket.create_connection((server_ip, auth_port), timeout=5) as sock:
             public_key_bytes = sock.recv(2048)
@@ -27,8 +23,6 @@ def get_server_public_key(server_ip, auth_port):
                 print(f"[CLIENTE] Erro ao obter chave pública do servidor: {public_key_bytes.decode()}")
                 return None
             
-            # Carregar a chave pública a partir dos bytes recebidos
-            # RSAManager()._load_key_file agora só espera bytes
             public_key = RSAManager()._load_key_file(public_key_bytes)
             return public_key
     except socket.timeout:
@@ -46,14 +40,12 @@ def verificar_conexao_com_host(ip, porta):
         print("Endereço não encontrado.")
         return False
 
-    # 1. Obter a chave pública do servidor (via TCP)
     server_public_key = get_server_public_key(ip, porta)
     if not server_public_key:
         print("[CLIENTE] Não foi possível obter a chave pública do servidor. Autenticação abortada.")
         return False
 
     try:
-        # 2. Enviar token criptografado (via UDP)
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
             sock.settimeout(5)
 
@@ -68,10 +60,8 @@ def verificar_conexao_com_host(ip, porta):
                 print("[CLIENTE] Erro ao criptografar o token.")
                 return False
 
-            # Envia o token criptografado para o servidor via UDP
             sock.sendto(encrypted_token, (ip, porta))
 
-            # Recebe a resposta de autenticação do servidor via UDP
             resposta_servidor_bytes, _ = sock.recvfrom(1024)
             resposta_servidor = resposta_servidor_bytes.decode('utf-8').strip()
 
