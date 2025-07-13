@@ -21,9 +21,7 @@ class ClientHandler(QObject):
     @Slot()
     def run(self): 
         with clientes_lock:
-            handlers.append(self)
-            self.client_status_for_host.emit(f"[ClientHandler] Cliente conectado: {self.addr}") 
-
+            handlers.append(self) 
         try:
             try:
                 initial_message_bytes = self.client_socket.recv(1024)
@@ -31,7 +29,7 @@ class ClientHandler(QObject):
                     initial_message = initial_message_bytes.decode('utf-8').strip() 
                     if initial_message.startswith("__USERNAME__:"):
                         self.username = initial_message.split(":", 1)[1]
-                        self.client_status_for_host.emit(f"[ClientHandler] Cliente '{self.username}' ({self.addr}) conectado.")
+                        self.client_status_for_host.emit(f"[ClientHandler] Cliente '{self.username}' conectado.")
                     else:
                         print(f"[ClientHandler] Primeira mensagem inesperada de {self.addr}: {initial_message}")
                         self.new_message_for_host.emit(f"[ClientHandler] Mensagem inesperada de {self.addr}: {initial_message}")
