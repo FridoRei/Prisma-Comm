@@ -1,3 +1,4 @@
+# src/core/network/connection_manager.py
 import subprocess
 import socket
 from src.core.auth.token_manager import gerar_token
@@ -20,7 +21,6 @@ def get_server_public_key(server_ip, auth_port):
     Solicita a chave pública RSA do servidor via TCP.
     """
     try:
-        # Cria uma NOVA conexão TCP para obter a chave pública
         with socket.create_connection((server_ip, auth_port), timeout=5) as sock:
             public_key_bytes = sock.recv(2048)
             if public_key_bytes.startswith(b"ERROR:"):
@@ -28,6 +28,7 @@ def get_server_public_key(server_ip, auth_port):
                 return None
             
             # Carregar a chave pública a partir dos bytes recebidos
+            # RSAManager()._load_key_file agora só espera bytes
             public_key = RSAManager()._load_key_file(public_key_bytes)
             return public_key
     except socket.timeout:
@@ -53,7 +54,6 @@ def verificar_conexao_com_host(ip, porta):
 
     try:
         # 2. Enviar token criptografado (via UDP)
-        # Cria um NOVO socket UDP para a autenticação
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
             sock.settimeout(5)
 
@@ -76,11 +76,9 @@ def verificar_conexao_com_host(ip, porta):
             resposta_servidor = resposta_servidor_bytes.decode('utf-8').strip()
 
             if resposta_servidor == "AUTH_SUCCESS":
-                print("[CLIENTE] Autenticação bem-sucedida!") # Adicionado para clareza
+                print("[CLIENTE] Autenticação bem-sucedida!")
                 return True
             else:
-                # Se a resposta não for AUTH_SUCCESS, é uma falha.
-                # A mensagem de erro agora deve ser mais específica se o servidor enviar algo inesperado.
                 print(f"[CLIENTE] Autenticação falhou. Resposta do servidor: '{resposta_servidor}'")
                 return False
 
