@@ -6,10 +6,7 @@ from src.core.chat.client_handler import ClientHandler
 def broadcast_from_host(message: str, chat_widget_instance): 
     if not message:
         return
-
-    if chat_widget_instance:
-        chat_widget_instance.add_message_to_chat(f"Você (Host): {message}")
-
+    
     message_with_prefix = f"[Host] {message}"
 
     with clientes_lock:

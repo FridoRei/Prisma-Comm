@@ -1,8 +1,9 @@
 import subprocess
 import socket
-from src.core.auth.token_manager import gerar_token, calcular_palavra_base 
+from src.core.auth.token_manager import gerar_token
+from src.core.auth.rsa_manager import RSAManager
 
-def obter_gateway(): 
+def obter_gateway():
     try:
         result = subprocess.run(["ip", "route"], capture_output=True, text=True)
         for line in result.stdout.splitlines():
@@ -14,35 +15,79 @@ def obter_gateway():
         print(f"[ERRO] ao obter gateway: {e}")
     return None
 
+def get_server_public_key(server_ip, auth_port):
+    """
+    Solicita a chave pública RSA do servidor via TCP.
+    """
+    try:
+        # Cria uma NOVA conexão TCP para obter a chave pública
+        with socket.create_connection((server_ip, auth_port), timeout=5) as sock:
+            public_key_bytes = sock.recv(2048)
+            if public_key_bytes.startswith(b"ERROR:"):
+                print(f"[CLIENTE] Erro ao obter chave pública do servidor: {public_key_bytes.decode()}")
+                return None
+            
+            # Carregar a chave pública a partir dos bytes recebidos
+            public_key = RSAManager()._load_key_file(public_key_bytes)
+            return public_key
+    except socket.timeout:
+        print(f"[CLIENTE] Timeout ao tentar obter chave pública do servidor ({server_ip}:{auth_port}).")
+        return None
+    except ConnectionRefusedError:
+        print(f"[CLIENTE] Conexão recusada ao tentar obter chave pública do servidor ({server_ip}:{auth_port}).")
+        return None
+    except Exception as e:
+        print(f"[CLIENTE] Erro ao obter chave pública do servidor: {e}")
+        return None
+
 def verificar_conexao_com_host(ip, porta):
     if not ip:
         print("Endereço não encontrado.")
         return False
 
-    try:
-        with socket.create_connection((ip, porta), timeout=5) as sock: 
+    # 1. Obter a chave pública do servidor (via TCP)
+    server_public_key = get_server_public_key(ip, porta)
+    if not server_public_key:
+        print("[CLIENTE] Não foi possível obter a chave pública do servidor. Autenticação abortada.")
+        return False
 
-            token_para_envio = gerar_token() 
+    try:
+        # 2. Enviar token criptografado (via UDP)
+        # Cria um NOVO socket UDP para a autenticação
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.settimeout(5)
+
+            token_para_envio = gerar_token()
             if not token_para_envio:
                 print("[CLIENTE] Erro ao gerar token para envio.")
                 return False
 
-            sock.sendall(token_para_envio.encode('utf-8')) 
+            encrypted_token = RSAManager().encrypt_with_public_key(token_para_envio.encode("utf-8"), server_public_key)
 
-            resposta_servidor = sock.recv(1024).decode('utf-8').strip()
+            if not encrypted_token:
+                print("[CLIENTE] Erro ao criptografar o token.")
+                return False
 
-            if resposta_servidor == "AUTH_SUCCESS": 
+            # Envia o token criptografado para o servidor via UDP
+            sock.sendto(encrypted_token, (ip, porta))
+
+            # Recebe a resposta de autenticação do servidor via UDP
+            resposta_servidor_bytes, _ = sock.recvfrom(1024)
+            resposta_servidor = resposta_servidor_bytes.decode('utf-8').strip()
+
+            if resposta_servidor == "AUTH_SUCCESS":
+                print("[CLIENTE] Autenticação bem-sucedida!") # Adicionado para clareza
                 return True
-            else: 
-                print(f"[CLIENTE] Autenticação falhou: {resposta_servidor}")
+            else:
+                # Se a resposta não for AUTH_SUCCESS, é uma falha.
+                # A mensagem de erro agora deve ser mais específica se o servidor enviar algo inesperado.
+                print(f"[CLIENTE] Autenticação falhou. Resposta do servidor: '{resposta_servidor}'")
                 return False
 
     except socket.timeout:
-        print(f"[ERRO] Timeout na conexão com o host de autenticação ({ip}:{porta}).") 
-    except ConnectionRefusedError:
-        print(f"[ERRO] Conexão recusada pelo host de autenticação ({ip}:{porta}). O servidor pode não estar ativo ou a porta está bloqueada.")
+        print(f"[ERRO] Timeout na conexão com o host de autenticação ({ip}:{porta}). O servidor não respondeu ao token UDP.")
     except Exception as e:
-        print(f"[ERRO] Falha na conexão com o host de autenticação: {e}") 
+        print(f"[ERRO] Falha na conexão com o host de autenticação: {e}")
     return False
 
 def obter_gateway_generico():
