@@ -2,15 +2,10 @@ from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_OAEP
 import os 
 
-class RSAManager:
-    _instance = None
-    
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._private_key = None 
-            cls._public_key = None  
-        return cls._instance
+class RSAManager:  
+    def __init__(self):
+        self._private_key = None 
+        self._public_key = None  
 
     def generate_temp_keys(self):
         key = RSA.generate(2048)
@@ -31,7 +26,14 @@ class RSAManager:
             return self._public_key.export_key()
         return None
 
-    def decrypt_token(self, encrypted_token: bytes) -> str:
+    def decrypt_bytes(self, encrypted_data: bytes) -> bytes:
+        if not self._private_key:
+            raise ValueError("Chave privada RSA não carregada. Chame generate_ephemeral_keys() primeiro.")
+        
+        cipher = PKCS1_OAEP.new(self._private_key)
+        return cipher.decrypt(encrypted_data)
+
+    def decrypt_string(self, encrypted_token: bytes) -> str:
         if not self._private_key:
             raise ValueError("Chave privada RSA não carregada. Chame generate_ephemeral_keys() primeiro.")
         

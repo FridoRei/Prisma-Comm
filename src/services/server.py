@@ -47,7 +47,7 @@ def run_auth_server(auth_port, stop_event):
         try:
             encrypted_token, addr = udp_server_socket.recvfrom(256)
             try:
-                token = rsa_manager_instance.decrypt_token(encrypted_token)
+                token = rsa_manager_instance.decrypt_string(encrypted_token)
                 if validar_token(token):
                     with authenticated_ips_lock:
                         authenticated_ips.add(addr[0])
