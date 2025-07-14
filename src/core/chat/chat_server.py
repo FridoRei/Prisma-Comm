@@ -1,6 +1,6 @@
 import socket
 import threading
-from src.core.chat.globals import clientes_lock, handlers, authenticated_ips, authenticated_ips_lock # Importar a lista e o lock
+from src.core.chat.globals import clientes_lock, handlers, authenticated_ips, authenticated_ips_lock
 from src.core.chat.client_handler import ClientHandler 
 
 def broadcast_from_host(message: str, chat_widget_instance): 

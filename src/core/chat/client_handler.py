@@ -17,8 +17,8 @@ class ClientHandler(QObject):
         self.username = f"[{addr[0]}]"
         self._running = True
         self.client_socket.settimeout(1.0)
-        self.aes_manager = None # A chave AES para este cliente
-        self.rsa_manager_temp = RSAManager() # Instância temporária para o handshake RSA
+        self.aes_manager = None 
+        self.rsa_manager_temp = RSAManager() 
 
     def stop(self): 
         self._running = False
@@ -28,29 +28,24 @@ class ClientHandler(QObject):
         with clientes_lock:
             handlers.append(self) 
         try:
-            # --- PASSO 1: Handshake de Chave AES (RSA para AES) ---
             self.client_status_for_host.emit(f"[ClientHandler] Iniciando handshake de chave AES com {self.addr[0]}...")
             try:
-                # 1. Servidor gera par RSA temporário e envia chave pública
                 self.rsa_manager_temp.generate_temp_keys()
                 public_key_bytes = self.rsa_manager_temp.get_public_key_bytes()
                 self.client_socket.sendall(public_key_bytes)
                 self.client_status_for_host.emit(f"[ClientHandler] Chave pública RSA enviada para {self.addr[0]}.")
             
-                # 2. Servidor recebe chave AES criptografada do cliente
                 encrypted_aes_key_b64 = self.client_socket.recv(2048).decode('utf-8')               
                 encrypted_aes_key = AESManager.base64_to_bytes(encrypted_aes_key_b64)
                 self.client_status_for_host.emit(f"[ClientHandler] Chave AES criptografada recebida de {self.addr[0]}.")
 
-                # 3. Servidor descriptografa a chave AES
                 aes_key_bytes = self.rsa_manager_temp.decrypt_bytes(encrypted_aes_key)
                 self.aes_manager = AESManager(aes_key_bytes)
                 self.client_status_for_host.emit(f"[ClientHandler] Chave AES descriptografada para {self.addr[0]}.")
 
-                # 4. Servidor armazena a chave AES e descarta o par RSA temporário
                 with client_aes_keys_lock:
                     client_aes_keys[self.addr[0]] = self.aes_manager.get_key()
-                self.rsa_manager_temp.clear_keys() # Descarta as chaves RSA temporárias
+                self.rsa_manager_temp.clear_keys() 
                 self.client_socket.sendall(b"AES_HANDSHAKE_SUCCESS")
                 self.client_status_for_host.emit(f"[ClientHandler] Handshake AES concluído com {self.addr[0]}.")
 
@@ -60,9 +55,8 @@ class ClientHandler(QObject):
                 traceback.print_exc()
                 self.client_socket.sendall(b"AES_HANDSHAKE_FAILURE")
                 self.client_socket.close()
-                return # Aborta a conexão se o handshake falhar
+                return 
 
-            # --- Lógica de recebimento de nome de usuário (mantida) ---
             try:
                 initial_message_bytes = self.client_socket.recv(1024)
                 if initial_message_bytes:
@@ -81,12 +75,9 @@ class ClientHandler(QObject):
             except Exception as e:
                 print(f"[ClientHandler] Erro ao receber nome de usuário de {self.addr}: {e}. Usando IP.")
 
-            # --- Loop principal de mensagens (agora com criptografia) ---
             while self._running: 
                 try:
-                    # Recebe a mensagem criptografada (nonce + ciphertext + tag)
-                    # Assumimos um formato: nonce_b64|ciphertext_b64|tag_b64
-                    encrypted_message_b64 = self.client_socket.recv(2048).decode('utf-8') # Aumentar buffer se necessário
+                    encrypted_message_b64 = self.client_socket.recv(2048).decode('utf-8') 
                     if not encrypted_message_b64: 
                         print(f"[ClientHandler] Cliente {self.username} ({self.addr}) desconectou")
                         break
@@ -97,7 +88,6 @@ class ClientHandler(QObject):
                         ciphertext = AESManager.base64_to_bytes(parts[1])
                         tag = AESManager.base64_to_bytes(parts[2])
 
-                        # Descriptografa a mensagem
                         try:
                             mensagem_descriptografada = self.aes_manager.decrypt(nonce, ciphertext, tag)
                             self.new_message_for_host.emit(f"{self.username}: {mensagem_descriptografada}")
@@ -127,7 +117,7 @@ class ClientHandler(QObject):
                 if client_ip in authenticated_ips:
                     authenticated_ips.remove(client_ip)
             
-            with client_aes_keys_lock: # Remover a chave AES do cliente ao desconectar
+            with client_aes_keys_lock: 
                 if client_ip in client_aes_keys:
                     del client_aes_keys[client_ip]
                     self.client_status_for_host.emit(f"[ClientHandler] Chave AES de {client_ip} removida.")
@@ -137,10 +127,8 @@ class ClientHandler(QObject):
 
     def send_to_client(self, message: str): 
         try:
-            if self._running and self.aes_manager: # Só envia se estiver rodando e tiver chave AES
-                # Criptografa a mensagem com a chave AES DESTE CLIENTE
+            if self._running and self.aes_manager:
                 nonce, ciphertext, tag = self.aes_manager.encrypt(message)
-                # Envia no formato nonce_b64|ciphertext_b64|tag_b64
                 encrypted_data_b64 = f"{AESManager.bytes_to_base64(nonce)}|{AESManager.bytes_to_base64(ciphertext)}|{AESManager.bytes_to_base64(tag)}"
                 self.client_socket.sendall(encrypted_data_b64.encode('utf-8'))
             elif not self.aes_manager:
@@ -149,16 +137,12 @@ class ClientHandler(QObject):
             print(f"[ClientHandler] Erro ao enviar para {self.username} ({self.addr}): {e}")
 
     def broadcast_message(self, message: str, sender_socket=None): 
-        # A mensagem 'message' aqui JÁ ESTÁ DESCRIPTOGRAFADA pelo remetente.
-        # Agora, precisamos criptografá-la para CADA DESTINATÁRIO com a chave DELE.
         with clientes_lock:
             current_handlers = handlers.copy()
 
         for handler in current_handlers:
-            # Não envia para o próprio remetente e verifica se o handler está ativo
             if handler.client_socket != sender_socket and handler._running:
                 try:
-                    # Obtém a chave AES do destinatário
                     with client_aes_keys_lock:
                         dest_aes_key = client_aes_keys.get(handler.addr[0])
                     

@@ -26,13 +26,11 @@ class ChatWidget(QWidget):
             padding: 5px; /* Espaçamento interno */
         """)
         
-        # --- ADICIONE ESTA LINHA ---
-        # Garante que o container da área de mensagens também se expanda verticalmente
         message_area_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         self.textview = QTextEdit()
         self.textview.setReadOnly(True)
-        self.textview.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding) # Já estava correto
+        self.textview.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding) F
         self.textview.setStyleSheet("""
             background-color: #2e2e2f; /* Cor de fundo do textview */
             border: none; /* Remove borda padrão */

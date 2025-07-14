@@ -48,7 +48,6 @@ class MainWindow(QMainWindow):
     def set_original_streams(self, stdout, stderr):
         self.original_stdout = stdout
         self.original_stderr = stderr
-        # Agora que temos os streams originais, podemos criar o AppService
         self.app_service = AppService(self, self.original_stdout, self.original_stderr)
 
     @Slot(str)
