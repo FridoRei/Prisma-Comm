@@ -11,6 +11,11 @@ RSA_KEY_LIFETIME_SECONDS = 10
 def handle_public_key_request(conn, addr):
     client_ip = addr[0]
     try:
+        with authenticated_ips_lock:
+            if client_ip in authenticated_ips:
+                conn.sendall(b"CONNECTION_REFUSED\n")
+                return
+            
         print(f"[AuthServer] Requisição de chave pública de {addr}")
 
         current_rsa_manager = RSAManager()
@@ -20,7 +25,6 @@ def handle_public_key_request(conn, addr):
 
         if public_key_bytes:
             conn.sendall(public_key_bytes)
-            print(f"[AuthServer] Chave pública RSA enviada para {addr}. Armazenando chave privada temporariamente.")
 
             with temp_rsa_managers_lock:
                 temp_rsa_managers[client_ip] = {
@@ -68,6 +72,15 @@ def run_auth_server(auth_port, stop_event):
             encrypted_token, addr = udp_server_socket.recvfrom(256)
             client_ip = addr[0]
 
+            with authenticated_ips_lock:
+                if client_ip in authenticated_ips:
+                    udp_server_socket.sendto(b"CONNECTION_REFUSED\n")
+                    with temp_rsa_managers_lock:
+                        if client_ip in temp_rsa_managers:
+                            temp_rsa_managers[client_ip]["manager"].clear_keys()
+                            del temp_rsa_managers[client_ip]
+                    continue
+
             current_rsa_manager_data = None
             with temp_rsa_managers_lock:
                 current_rsa_manager_data = temp_rsa_managers.get(client_ip)
@@ -97,7 +110,6 @@ def run_auth_server(auth_port, stop_event):
                     if client_ip in temp_rsa_managers:
                         temp_rsa_managers[client_ip]["manager"].clear_keys() 
                         del temp_rsa_managers[client_ip] 
-                        print(f"[AuthServer] Chave RSA temporária para {client_ip} removida após uso.")
 
         except socket.timeout:
             pass 

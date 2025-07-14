@@ -1,6 +1,6 @@
 import socket
 import threading
-from src.core.chat.globals import clientes_lock, handlers, authenticated_ips, authenticated_ips_lock
+from src.core.chat.globals import clientes_lock, handlers, authenticated_ips, authenticated_ips_lock, connected_users_lock, connected_users
 from src.core.chat.client_handler import ClientHandler 
 
 def broadcast_from_host(message: str, chat_widget_instance): 
@@ -48,11 +48,15 @@ def start_server(chat_widget_instance, port):
             try:
                 conn, addr = server_socket.accept()
                 client_ip = addr[0]
-                print(f"[ChatServer] Tentativa de conexão de {addr}")
-
+                with connected_users_lock:
+                    if client_ip in connected_users:
+                        conn.sendall("AUTH_REQUIRED\n".encode()) 
+                        conn.close()
+                        continue
+                print(f"[ChatServer] Tentativa de conexão ao chat de {addr}")
                 with authenticated_ips_lock:
                     if client_ip in authenticated_ips:
-                        print(f"[ChatServer] Conexão de {client_ip} aceita.")
+                        print(f"[ChatServer] Conexão ao chat de {client_ip} aceita.")
                         
                         handler = ClientHandler(conn, addr)
 
@@ -61,10 +65,11 @@ def start_server(chat_widget_instance, port):
                         if chat_widget_instance:
                             handler.new_message_for_host.connect(chat_widget_instance.add_message_to_chat)
                             handler.client_status_for_host.connect(chat_widget_instance.add_message_to_chat)
+                            handler.user_list_updated.connect(chat_widget_instance.update_user_list)
 
                         thread.start()
                     else:
-                        print(f"[ChatServer] Conexão de {client_ip} rejeitada.")
+                        print(f"[ChatServer] Conexão ao chat de {client_ip} rejeitada.")
                         conn.sendall("AUTH_REQUIRED\n".encode()) 
                         conn.close()
 

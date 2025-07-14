@@ -1,7 +1,7 @@
 import traceback
 import socket
 from PySide6.QtCore import QObject, Signal, Slot
-from src.core.chat.globals import clientes_lock, handlers, authenticated_ips, authenticated_ips_lock, client_aes_keys, client_aes_keys_lock
+from src.core.chat.globals import clientes_lock, handlers, authenticated_ips, authenticated_ips_lock, client_aes_keys, client_aes_keys_lock, connected_users, connected_users_lock
 from src.core.auth.rsa_manager import RSAManager
 from src.core.crypto.aes_manager import AESManager 
 
@@ -9,6 +9,7 @@ class ClientHandler(QObject):
 
     new_message_for_host = Signal(str)
     client_status_for_host = Signal(str)
+    user_list_updated = Signal()
 
     def __init__(self, client_socket, addr): 
         super().__init__()
@@ -22,6 +23,12 @@ class ClientHandler(QObject):
 
     def stop(self): 
         self._running = False
+        try:
+            if self.client_socket:
+                self.client_socket.shutdown(socket.SHUT_RDWR)
+                self.client_socket.close()
+        except Exception as e:
+            print(f"[ClientHandler] Erro ao fechar socket do cliente {self.username}: {e}")        
 
     @Slot()
     def run(self): 
@@ -79,6 +86,14 @@ class ClientHandler(QObject):
                     print(f"[ClientHandler] Cliente {self.addr} desconectou antes de enviar o nome.")
                     self.client_socket.close()
                     return
+                
+                with connected_users_lock:
+                    connected_users[self.addr[0]] = {
+                        "username": self.username,
+                        "handler": self
+                    }
+                self.user_list_updated.emit()                
+                
             except socket.timeout: 
                 print(f"[ClientHandler] Timeout ao esperar nome de usuário de {self.addr}. Usando IP.")
                 self.client_socket.close()
@@ -134,6 +149,11 @@ class ClientHandler(QObject):
                 if client_ip in client_aes_keys:
                     del client_aes_keys[client_ip]
                     self.client_status_for_host.emit(f"[ClientHandler] Chave AES de {client_ip} removida.")
+                    
+            with connected_users_lock:
+                if client_ip in connected_users:
+                    del connected_users[client_ip]
+            self.user_list_updated.emit()                    
 
             self.client_socket.close()
             self.client_status_for_host.emit(f"[ClientHandler] Cliente '{self.username}' desconectado.")

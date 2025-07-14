@@ -5,7 +5,7 @@ from src.core.chat.chat_client import ChatClient
 from src.core.chat.chat_server import start_server, broadcast_from_host
 from src.services.auth_service import AuthService
 from src.config.settings import DEFAULT_USERNAME, DEFAULT_AUTH_PORT, DEFAULT_COMM_PORT
-from src.core.chat.globals import authenticated_ips, authenticated_ips_lock, temp_rsa_managers, temp_rsa_managers_lock
+from src.core.chat.globals import authenticated_ips, authenticated_ips_lock, temp_rsa_managers, temp_rsa_managers_lock, connected_users, connected_users_lock
 import socket
 from src.gui.dialogs import JoinOptionDialog 
 
@@ -136,3 +136,6 @@ class AppService:
                 if ip in temp_rsa_managers:
                     temp_rsa_managers[ip]["manager"].clear_keys()
                     del temp_rsa_managers[ip]         
+        with connected_users_lock:
+            connected_users.clear()
+            print("[AppService] Lista de usuários conectados limpa.")
