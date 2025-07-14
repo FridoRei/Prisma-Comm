@@ -4,7 +4,16 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QIcon, QFont
 from PySide6.QtCore import QSize, Qt
+import os
 
+current_dir = os.path.dirname(os.path.abspath(__file__))
+icons_dir = os.path.join(current_dir, 'icons')
+settings_icon = os.path.join(icons_dir, 'settings.ico')
+homepage_icon = os.path.join(icons_dir, 'homepage.ico')
+chat_ico = os.path.join(icons_dir, 'chat.ico')
+host_ico = os.path.join(icons_dir, 'host.ico')
+logs_ico = os.path.join(icons_dir, 'logs.ico')
+client_ico = os.path.join(icons_dir, 'client.ico')
 
 class MainWindowUI:
     def setup_ui(self, parent):
@@ -35,7 +44,7 @@ class MainWindowUI:
         """
 
         parent.btn_home = QPushButton("")
-        parent.btn_home.setIcon(QIcon.fromTheme("go-home"))
+        parent.btn_home.setIcon(QIcon(homepage_icon))
         parent.btn_home.setIconSize(QSize(20, 20))
         parent.btn_home.setFixedSize(40, 40)
         parent.btn_home.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -44,7 +53,7 @@ class MainWindowUI:
         sidebar_layout.addWidget(parent.btn_home)
 
         parent.btn_settings = QPushButton("")
-        parent.btn_settings.setIcon(QIcon.fromTheme("preferences-system"))
+        parent.btn_settings.setIcon(QIcon(settings_icon))
         parent.btn_settings.setIconSize(QSize(20, 20))
         parent.btn_settings.setFixedSize(40, 40)
         parent.btn_settings.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -53,7 +62,7 @@ class MainWindowUI:
         sidebar_layout.addWidget(parent.btn_settings)
 
         parent.btn_chat = QPushButton("")
-        parent.btn_chat.setIcon(QIcon.fromTheme("mail-message-new")) 
+        parent.btn_chat.setIcon(QIcon(chat_ico)) 
         parent.btn_chat.setIconSize(QSize(20, 20))
         parent.btn_chat.setFixedSize(40, 40)
         parent.btn_chat.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -62,7 +71,7 @@ class MainWindowUI:
         sidebar_layout.addWidget(parent.btn_chat)
 
         parent.btn_logs = QPushButton("")
-        parent.btn_logs.setIcon(QIcon.fromTheme("user-available")) 
+        parent.btn_logs.setIcon(QIcon(logs_ico)) 
         parent.btn_logs.setIconSize(QSize(20, 20))
         parent.btn_logs.setFixedSize(40, 40)
         parent.btn_logs.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -123,14 +132,14 @@ class MainWindowUI:
         """
 
         parent.btn_host = QPushButton("Hospedar Rede")
-        parent.btn_host.setIcon(QIcon.fromTheme("network-wireless"))
+        parent.btn_host.setIcon(QIcon(host_ico))
         parent.btn_host.setIconSize(QSize(32, 32))
         parent.btn_host.setFixedSize(200, 80)
         parent.btn_host.setCursor(Qt.CursorShape.PointingHandCursor)
         parent.btn_host.setStyleSheet(host_join_button_style) 
 
         parent.btn_join = QPushButton("Juntar-se à Rede")
-        parent.btn_join.setIcon(QIcon.fromTheme("contact-new"))
+        parent.btn_join.setIcon(QIcon(client_ico))
         parent.btn_join.setIconSize(QSize(32, 32))
         parent.btn_join.setFixedSize(200, 80)
         parent.btn_join.setCursor(Qt.CursorShape.PointingHandCursor)
