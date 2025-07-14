@@ -1,7 +1,5 @@
 from Crypto.Cipher import AES
 from Crypto.Random import get_random_bytes
-from Crypto.Protocol.KDF import PBKDF2
-from Crypto.Hash import SHA512
 import base64
 
 class AESManager:

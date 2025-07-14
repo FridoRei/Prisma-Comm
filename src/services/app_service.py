@@ -17,6 +17,13 @@ class AppService:
         self.chat_server_thread = None
         self.is_connected_to_chat = False
 
+    def show_error(self, title, message, critical=False):
+        message_box = QMessageBox(self.main_window)
+        message_box.setWindowTitle(title)
+        message_box.setText(message)
+        message_box.setIcon(QMessageBox.Critical if critical else QMessageBox.Warning)
+        message_box.exec()
+
     def show_dialog(self, title, message):
         msg = QMessageBox(self.main_window)
         msg.setWindowTitle(title)

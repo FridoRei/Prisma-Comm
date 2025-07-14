@@ -13,6 +13,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.ui = MainWindowUI()
         self.ui.setup_ui(self)
+        self.chat_client.worker.error_occurred.connect(self.handle_error)
 
         self.setMinimumSize(800, 400)
 
@@ -44,6 +45,9 @@ class MainWindow(QMainWindow):
         self.comm_port_entry.setText(str(self.comm_port))
 
         self.show_home_page()
+
+    def handle_error(self, title, message):
+        self.app_service.show_error(title, message)
 
     def set_original_streams(self, stdout, stderr):
         self.original_stdout = stdout
