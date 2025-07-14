@@ -25,13 +25,6 @@ class AESManager:
         return plaintext.decode('utf-8')
 
     @staticmethod
-    def derive_key_from_password(password: str, salt: bytes = None) -> bytes:
-        if salt is None:
-            salt = get_random_bytes(16) 
-        key = PBKDF2(password.encode('utf-8'), salt, dkLen=32, count=1000000, hmac_hash_module=SHA512)
-        return key, salt
-
-    @staticmethod
     def bytes_to_base64(data: bytes) -> str:
         return base64.b64encode(data).decode('utf-8')
 

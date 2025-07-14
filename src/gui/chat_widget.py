@@ -30,7 +30,7 @@ class ChatWidget(QWidget):
 
         self.textview = QTextEdit()
         self.textview.setReadOnly(True)
-        self.textview.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding) F
+        self.textview.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding) 
         self.textview.setStyleSheet("""
             background-color: #2e2e2f; /* Cor de fundo do textview */
             border: none; /* Remove borda padrão */

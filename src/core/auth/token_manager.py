@@ -1,6 +1,5 @@
 import bcrypt
 from datetime import datetime
-from src.config.settings import SALT_FIXO 
 
 def calcular_palavra_base():
     data_atual = datetime.now()
@@ -32,7 +31,8 @@ def calcular_palavra_base():
 def gerar_token():
     try:
         palavra_base = calcular_palavra_base()
-        token = bcrypt.hashpw(palavra_base.encode("utf-8"), SALT_FIXO)
+        salt_aleatorio = bcrypt.gensalt()
+        token = bcrypt.hashpw(palavra_base.encode("utf-8"), salt_aleatorio)
         return token.decode("utf-8")
     except Exception as e:
         print(f"[TokenManager] Erro ao gerar token: {e}")
@@ -41,7 +41,7 @@ def gerar_token():
 def validar_token(client_token):
     try:
         palavra_base_local = calcular_palavra_base()
-        result = bcrypt.checkpw(palavra_base_local.encode("utf-8"), client_token.encode("utf-8"))
+        result = bcrypt.checkpw(palavra_base_local.encode(), client_token.encode())
         return result
     except Exception as e:
         return False
