@@ -1,4 +1,3 @@
-# FileName: /wifi-chat v2/src/services/server.py
 import socket
 import threading
 import time
@@ -12,15 +11,11 @@ RSA_KEY_LIFETIME_SECONDS = 10
 
 def handle_public_key_request(conn: socket.socket, addr: tuple, dos_detector: DoSDetector):
     client_ip = addr[0]
-    # VERIFICAÇÃO DE DOS: DEVE SER A PRIMEIRA COISA
     if not dos_detector.check_and_record(client_ip):
         print(f"[WARNING] [AuthServer] Requisição de chave pública de {addr} bloqueada por DoSDetector.")
-        try:
-            conn.sendall(b"BLOCKED_BY_DOS_DETECTOR\n") # Informar o cliente
-            conn.close()
-        except Exception as e:
-            print(f"[ERROR] [AuthServer] Erro ao fechar conexão bloqueada por DoS: {e}")
-        return # ENCERRAR A FUNÇÃO AQUI
+        conn.sendall(b"BLOCKED_BY_DOS_DETECTOR\n") 
+        conn.close()
+        return 
 
     try:
         with authenticated_ips_lock:
@@ -97,21 +92,18 @@ def run_auth_server(auth_port: int, stop_event: threading.Event, host_password: 
             except Exception as e:
                 print(f"[ERROR] [AuthServer] Erro inesperado ao aceitar conexão TCP: {e}")
             
-            # Receber dados UDP (para autenticação)
             try:
                 encrypted_password_hash_from_client, addr = udp_server_socket.recvfrom(256)
                 client_ip = addr[0]
 
-                # VERIFICAÇÃO DE DOS: DEVE SER A PRIMEIRA COISA
                 if not dos_detector.check_and_record(client_ip):
                     print(f"[WARNING] [AuthServer] Tentativa de autenticação de {addr} bloqueada por DoSDetector.")
                     udp_server_socket.sendto(b"BLOCKED_BY_DOS_DETECTOR", addr)
-                    # Limpar chave RSA temporária se existir, pois a requisição foi bloqueada
                     with temp_rsa_managers_lock:
                         if client_ip in temp_rsa_managers:
                             temp_rsa_managers[client_ip]["manager"].clear_keys()
                             del temp_rsa_managers[client_ip]
-                    continue # ENCERRAR O PROCESSAMENTO AQUI
+                    continue 
 
                 print(f"[INFO] [AuthServer] Recebida tentativa de autenticação de {addr}.")
 

@@ -1,4 +1,3 @@
-# FileName: /wifi-chat v2/src/core/chat/chat_server.py
 import socket
 import threading
 from src.core.chat.globals import clientes_lock, handlers, authenticated_ips, authenticated_ips_lock, connected_users_lock, connected_users
@@ -61,17 +60,16 @@ def start_server(chat_widget_instance, port, host_ed25519_private_key: ed25519.E
                 client_ip = addr[0]
                 print(f"[INFO] [ChatServer] Tentativa de conexão ao chat de {addr}")
 
-                # VERIFICAÇÃO DE DOS: DEVE SER A PRIMEIRA COISA
                 if not dos_detector.check_and_record(client_ip):
                     print(f"[WARNING] [ChatServer] Conexão de chat de {addr} bloqueada por DoSDetector.")
-                    conn.sendall(b"BLOCKED_BY_DOS_DETECTOR\n") # Informar o cliente
+                    conn.sendall(b"BLOCKED_BY_DOS_DETECTOR\n") 
                     conn.close()
-                    continue # ENCERRAR O PROCESSAMENTO AQUI
+                    continue 
 
                 with connected_users_lock:
                     if client_ip in connected_users:
                         print(f"[WARNING] [ChatServer] Cliente {client_ip} já está conectado. Recusando nova conexão.")
-                        conn.sendall(b"AUTH_REQUIRED\n") # Pode ser uma mensagem mais específica como "ALREADY_CONNECTED"
+                        conn.sendall(b"AUTH_REQUIRED\n") 
                         conn.close()
                         continue
 

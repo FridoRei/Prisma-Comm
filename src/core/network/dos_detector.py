@@ -8,6 +8,7 @@ class DoSDetector:
                  request_limit: int = 2,
                  time_window: int = 1,
                  block_duration: int = 300):
+        print(f"[INFO] DoSDetector initialized with limit: {request_limit}, window: {time_window}, block duration: {block_duration}")
         self.request_limit = request_limit
         self.time_window = time_window
         self.block_duration = block_duration
@@ -43,38 +44,34 @@ class DoSDetector:
                     print(f"[INFO] [DoSDetector] IP {ip} desbloqueado após {self.block_duration}s.")
             time.sleep(1) 
 
-    def check_and_record(self, ip_address: str) -> bool:
-        """
-        Verifica se o IP está bloqueado e registra uma nova requisição.
+     def check_and_record(self, ip_address: str) -> bool:
+         current_time = time.time()
+         with self.lock:
+             print(f"[DEBUG] Checking IP: {ip_address} at {current_time}")
+             if ip_address in self.blocked_ips:
+                 if current_time < self.blocked_ips[ip_address]:
+                     print(f"[DEBUG] IP {ip_address} is currently blocked until {self.blocked_ips[ip_address]}")
+                     return False
+                 else:
+                     print(f"[DEBUG] IP {ip_address} block expired. Unblocking.")
+                     del self.blocked_ips[ip_address]
 
-        Args:
-            ip_address (str): O endereço IP do cliente.
+             # Filter old requests
+             self.ip_requests[ip_address] = [ts for ts in self.ip_requests[ip_address] if ts > current_time - self.time_window]
+             print(f"[DEBUG] IP {ip_address} requests in window: {len(self.ip_requests[ip_address])}")
 
-        Returns:
-            bool: True se a requisição for permitida, False se o IP estiver bloqueado
-                  ou exceder o limite e for bloqueado.
-        """
-        current_time = time.time()
-        with self.lock:
-            if ip_address in self.blocked_ips:
-                if current_time < self.blocked_ips[ip_address]:
-                    print(f"[WARNING] [DoSDetector] Requisição de IP bloqueado: {ip_address}")
-                    return False
-                else:
-                    del self.blocked_ips[ip_address]
-                    print(f"[INFO] [DoSDetector] IP {ip_address} desbloqueado (expiração detectada no check).")
+             self.ip_requests[ip_address].append(current_time)
+             print(f"[DEBUG] IP {ip_address} new request count: {len(self.ip_requests[ip_address])}, limit: {self.request_limit}")
 
-            self.ip_requests[ip_address] = [ts for ts in self.ip_requests[ip_address] if ts > current_time - self.time_window]
+             if len(self.ip_requests[ip_address]) > self.request_limit:
+                 self.blocked_ips[ip_address] = current_time + self.block_duration
+                 print(f"[DEBUG] IP {ip_address} EXCEEDED LIMIT! Blocking until {self.blocked_ips[ip_address]}")
+                 self.ip_requests[ip_address].clear()
+                 return False
 
-            self.ip_requests[ip_address].append(current_time)
-
-            if len(self.ip_requests[ip_address]) > self.request_limit:
-                self.blocked_ips[ip_address] = current_time + self.block_duration
-                print(f"[ALERT] [DoSDetector] IP {ip_address} excedeu o limite de {self.request_limit} requisições em {self.time_window}s. Bloqueando por {self.block_duration}s.")
-                self.ip_requests[ip_address].clear()
-                return False
-            
-            return True
+             print(f"[DEBUG] IP {ip_address} request allowed.")
+             return True
+     
 
     def stop(self):
         """

@@ -1,4 +1,3 @@
-# FileName: /wifi-chat v2/src/core/chat/client_handler.py
 import traceback
 import socket
 from PySide6.QtCore import QObject, Signal, Slot
@@ -23,7 +22,7 @@ class ClientHandler(QObject):
         self.client_socket.settimeout(5.0) 
         self.aes_manager = None 
         self.ecc_manager = ECCManager() 
-        self.dos_detector = dos_detector # Armazenar a instância do detector
+        self.dos_detector = dos_detector
         
         if host_ed25519_private_key:
             self.ecc_manager._ed25519_private_key = host_ed25519_private_key
@@ -169,12 +168,9 @@ class ClientHandler(QObject):
                         print(f"[INFO] [ClientHandler] Cliente {self.username} ({self.addr[0]}) desconectou (recebeu dados vazios).")
                         break
 
-                    # VERIFICAÇÃO DE DOS PARA MENSAGENS:
                     if not self.dos_detector.check_and_record(client_ip):
                         print(f"[WARNING] [ClientHandler] Mensagem de {self.username} ({self.addr[0]}) bloqueada por DoSDetector.")
-                        # Opcional: enviar uma mensagem de volta ao cliente informando o bloqueio
-                        # self.send_to_client("[SERVER] Sua taxa de mensagens excedeu o limite. Você foi temporariamente bloqueado.")
-                        continue # Ignorar a mensagem e continuar o loop
+                        continue 
 
                     parts = encrypted_message_b64.split('|')
                     if len(parts) == 3:
