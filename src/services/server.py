@@ -1,3 +1,4 @@
+# FileName: /wifi-chat v2/src/services/server.py
 import socket
 import threading
 import time
@@ -11,13 +12,16 @@ RSA_KEY_LIFETIME_SECONDS = 10
 
 def handle_public_key_request(conn: socket.socket, addr: tuple, dos_detector: DoSDetector):
     client_ip = addr[0]
+    # VERIFICAÇÃO DE DOS: DEVE SER A PRIMEIRA COISA
     if not dos_detector.check_and_record(client_ip):
         print(f"[WARNING] [AuthServer] Requisição de chave pública de {addr} bloqueada por DoSDetector.")
         try:
+            conn.sendall(b"BLOCKED_BY_DOS_DETECTOR\n") # Informar o cliente
             conn.close()
         except Exception as e:
-            print(f"[ERROR] [AuthServer] Erro ao fechar conexão bloqueada por DoS")
-        return
+            print(f"[ERROR] [AuthServer] Erro ao fechar conexão bloqueada por DoS: {e}")
+        return # ENCERRAR A FUNÇÃO AQUI
+
     try:
         with authenticated_ips_lock:
             if client_ip in authenticated_ips:
@@ -33,6 +37,7 @@ def handle_public_key_request(conn: socket.socket, addr: tuple, dos_detector: Do
 
         if public_key_bytes:
             conn.sendall(public_key_bytes)
+            print(f"[INFO] [AuthServer] Chave pública RSA enviada para {addr}.")
 
             with temp_rsa_managers_lock:
                 temp_rsa_managers[client_ip] = {
@@ -65,6 +70,8 @@ def run_auth_server(auth_port: int, stop_event: threading.Event, host_password: 
         tcp_server_socket.listen(1) 
         tcp_server_socket.settimeout(1.0)
 
+        print(f"[INFO] [AuthServer] Servidor de autenticação iniciado na porta {auth_port}.")
+
         while not stop_event.is_set():
             with temp_rsa_managers_lock:
                 keys_to_remove = []
@@ -89,16 +96,24 @@ def run_auth_server(auth_port: int, stop_event: threading.Event, host_password: 
                     print(f"[ERROR] [AuthServer] Erro de sistema operacional ao aceitar conexão TCP: {e}")
             except Exception as e:
                 print(f"[ERROR] [AuthServer] Erro inesperado ao aceitar conexão TCP: {e}")
+            
+            # Receber dados UDP (para autenticação)
             try:
                 encrypted_password_hash_from_client, addr = udp_server_socket.recvfrom(256)
                 client_ip = addr[0]
+
+                # VERIFICAÇÃO DE DOS: DEVE SER A PRIMEIRA COISA
                 if not dos_detector.check_and_record(client_ip):
                     print(f"[WARNING] [AuthServer] Tentativa de autenticação de {addr} bloqueada por DoSDetector.")
+                    udp_server_socket.sendto(b"BLOCKED_BY_DOS_DETECTOR", addr)
+                    # Limpar chave RSA temporária se existir, pois a requisição foi bloqueada
                     with temp_rsa_managers_lock:
                         if client_ip in temp_rsa_managers:
                             temp_rsa_managers[client_ip]["manager"].clear_keys()
                             del temp_rsa_managers[client_ip]
-                    continue                
+                    continue # ENCERRAR O PROCESSAMENTO AQUI
+
+                print(f"[INFO] [AuthServer] Recebida tentativa de autenticação de {addr}.")
 
                 with authenticated_ips_lock:
                     if client_ip in authenticated_ips:
@@ -123,6 +138,7 @@ def run_auth_server(auth_port: int, stop_event: threading.Event, host_password: 
 
                 try:
                     decrypted_client_password_hash = current_rsa_manager.decrypt_string(encrypted_password_hash_from_client)
+                    print(f"[DEBUG] [AuthServer] Hash da senha do cliente descriptografado para {client_ip}.")
                     if verificar_senha(host_password, decrypted_client_password_hash):
                         with authenticated_ips_lock:
                             authenticated_ips.add(client_ip)
@@ -159,4 +175,3 @@ def run_auth_server(auth_port: int, stop_event: threading.Event, host_password: 
             tcp_server_socket.close()
             print("[INFO] [AuthServer] Socket TCP do servidor de autenticação fechado.")
         print("[INFO] [AuthServer] Servidor de autenticação encerrado.")
-

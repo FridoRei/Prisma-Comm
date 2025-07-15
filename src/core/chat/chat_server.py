@@ -1,9 +1,10 @@
+# FileName: /wifi-chat v2/src/core/chat/chat_server.py
 import socket
 import threading
 from src.core.chat.globals import clientes_lock, handlers, authenticated_ips, authenticated_ips_lock, connected_users_lock, connected_users
 from src.core.chat.client_handler import ClientHandler 
 from cryptography.hazmat.primitives.asymmetric import ed25519
-from src.core.network.dos_detector import DoSDetector 
+from src.core.network.dos_detector import DoSDetector
 
 chat_server_running = False
 
@@ -60,20 +61,20 @@ def start_server(chat_widget_instance, port, host_ed25519_private_key: ed25519.E
                 client_ip = addr[0]
                 print(f"[INFO] [ChatServer] Tentativa de conexão ao chat de {addr}")
 
+                # VERIFICAÇÃO DE DOS: DEVE SER A PRIMEIRA COISA
+                if not dos_detector.check_and_record(client_ip):
+                    print(f"[WARNING] [ChatServer] Conexão de chat de {addr} bloqueada por DoSDetector.")
+                    conn.sendall(b"BLOCKED_BY_DOS_DETECTOR\n") # Informar o cliente
+                    conn.close()
+                    continue # ENCERRAR O PROCESSAMENTO AQUI
+
                 with connected_users_lock:
                     if client_ip in connected_users:
                         print(f"[WARNING] [ChatServer] Cliente {client_ip} já está conectado. Recusando nova conexão.")
-                        conn.sendall("AUTH_REQUIRED\n".encode()) 
+                        conn.sendall(b"AUTH_REQUIRED\n") # Pode ser uma mensagem mais específica como "ALREADY_CONNECTED"
                         conn.close()
                         continue
 
-                if not dos_detector.check_and_record(client_ip):
-                    print(f"[WARNING] [ChatServer] Conexão de chat de {addr} bloqueada por DoSDetector.")
-                    conn.sendall("BLOCKED_BY_DOS_DETECTOR\n".encode())
-                    conn.close()
-                    continue
-
-                
                 with authenticated_ips_lock:
                     if client_ip in authenticated_ips:
                         print(f"[INFO] [ChatServer] Conexão ao chat de {client_ip} aceita (IP autenticado).")
@@ -90,7 +91,7 @@ def start_server(chat_widget_instance, port, host_ed25519_private_key: ed25519.E
                         thread.start()
                     else:
                         print(f"[WARNING] [ChatServer] Conexão ao chat de {client_ip} rejeitada. Cliente não autenticado.")
-                        conn.sendall("AUTH_REQUIRED\n".encode())
+                        conn.sendall(b"AUTH_REQUIRED\n")
                         conn.close()
 
             except socket.timeout:
@@ -122,4 +123,3 @@ def stop_chat_server():
         print("[INFO] [ChatServer] Sinal para encerrar servidor de chat enviado.")
     else:
         print("[INFO] [ChatServer] Servidor de chat já está parado ou não foi iniciado.")
-
