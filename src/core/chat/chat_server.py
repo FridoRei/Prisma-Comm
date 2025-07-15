@@ -2,6 +2,7 @@ import socket
 import threading
 from src.core.chat.globals import clientes_lock, handlers, authenticated_ips, authenticated_ips_lock, connected_users_lock, connected_users
 from src.core.chat.client_handler import ClientHandler 
+from cryptography.hazmat.primitives.asymmetric import ed25519
 
 def broadcast_from_host(message: str, chat_widget_instance): 
     if not message:
@@ -21,7 +22,7 @@ def broadcast_from_host(message: str, chat_widget_instance):
         except Exception as e:
             print(f"[ChatServer] ERRO CRÍTICO no broadcast para {handler.username} ({handler.addr}): {e}")
 
-def start_server(chat_widget_instance, port): 
+def start_server(chat_widget_instance, port, host_ed25519_private_key: ed25519.Ed25519PrivateKey, host_ed25519_public_key_bytes: bytes):
     print("[ChatServer] Iniciando servidor de chat...")
 
     with clientes_lock:
@@ -58,7 +59,7 @@ def start_server(chat_widget_instance, port):
                     if client_ip in authenticated_ips:
                         print(f"[ChatServer] Conexão ao chat de {client_ip} aceita.")
                         
-                        handler = ClientHandler(conn, addr)
+                        handler = ClientHandler(conn, addr, host_ed25519_private_key, host_ed25519_public_key_bytes)
 
                         thread = threading.Thread(target=handler.run, daemon=True)
 

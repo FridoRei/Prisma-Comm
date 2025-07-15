@@ -237,6 +237,59 @@ class MainWindowUI:
         top_settings_layout.addStretch() 
 
         settings_layout.addWidget(parent.top_settings_container)
+        
+        parent.ed25519_keys_container = QWidget()
+        ed25519_keys_layout = QVBoxLayout(parent.ed25519_keys_container)
+        parent.ed25519_keys_container.setStyleSheet("""
+            background-color: #4e4e4f;
+            border: 1px solid #666;
+            border-radius: 8px;
+            padding: 10px;
+            margin-top: 10px;
+        """)
+
+        ed25519_keys_layout.addWidget(QLabel("<b>Chaves Ed25519 para Assinatura (Chat):</b>"))
+        
+        # Chave Privada Ed25519
+        private_key_layout = QHBoxLayout()
+        private_key_layout.addWidget(QLabel("Chave Privada:"))
+        parent.ed25519_private_key_path = QLineEdit()
+        parent.ed25519_private_key_path.setReadOnly(True)
+        parent.ed25519_private_key_path.setStyleSheet("""
+            QLineEdit {
+                background-color: #3e3e3f;
+                border: none;
+                border-radius: 5px;
+                color: white;
+                padding: 5px;
+            }
+        """)
+        private_key_layout.addWidget(parent.ed25519_private_key_path)
+        parent.btn_load_ed25519_private_key = QPushButton("Carregar")
+        parent.btn_load_ed25519_private_key.setStyleSheet(host_join_button_style) 
+        private_key_layout.addWidget(parent.btn_load_ed25519_private_key)
+        ed25519_keys_layout.addLayout(private_key_layout)
+
+        public_key_layout = QHBoxLayout()
+        public_key_layout.addWidget(QLabel("Chave Pública:"))
+        parent.ed25519_public_key_path = QLineEdit()
+        parent.ed25519_public_key_path.setReadOnly(True)
+        parent.ed25519_public_key_path.setStyleSheet("""
+            QLineEdit {
+                background-color: #3e3e3f;
+                border: none;
+                border-radius: 5px;
+                color: white;
+                padding: 5px;
+            }
+        """)
+        public_key_layout.addWidget(parent.ed25519_public_key_path)
+        parent.btn_load_ed25519_public_key = QPushButton("Carregar")
+        parent.btn_load_ed25519_public_key.setStyleSheet(host_join_button_style) 
+        public_key_layout.addWidget(parent.btn_load_ed25519_public_key)
+        ed25519_keys_layout.addLayout(public_key_layout)
+
+        settings_layout.addWidget(parent.ed25519_keys_container)
         settings_layout.addStretch() 
 
         parent.btn_save_settings = QPushButton("Salvar Configurações")

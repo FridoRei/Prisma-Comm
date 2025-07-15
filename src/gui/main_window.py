@@ -1,4 +1,5 @@
-from PySide6.QtWidgets import (QMainWindow, QDialog, QLabel, QPushButton, QVBoxLayout, QLineEdit, QHBoxLayout, QMessageBox, QSizePolicy, QSpacerItem, QWidget, QTextEdit)
+from PySide6.QtWidgets import (QMainWindow, QDialog, QLabel, QPushButton, QLineEdit, QHBoxLayout, QMessageBox, QSizePolicy, QSpacerItem, QWidget, QTextEdit, QFileDialog) 
+from src.core.crypto.ecc_manager import ECCManager
 from PySide6.QtCore import Slot, Qt, QObject, Signal
 from PySide6.QtGui import QFont
 import sys
@@ -13,7 +14,6 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.ui = MainWindowUI()
         self.ui.setup_ui(self)
-        self.chat_client.worker.error_occurred.connect(self.handle_error)
 
         self.setMinimumSize(800, 400)
 
@@ -28,6 +28,7 @@ class MainWindow(QMainWindow):
         self.original_stderr = None
 
         self.app_service = None
+        self.ecc_manager = ECCManager()
 
         self.btn_home.clicked.connect(self.show_home_page)
         self.btn_settings.clicked.connect(self.show_settings_page)
@@ -40,6 +41,9 @@ class MainWindow(QMainWindow):
         self.username_entry.textChanged.connect(self.update_username)
         self.btn_save_settings.clicked.connect(self.save_settings)
 
+        self.btn_load_ed25519_private_key.clicked.connect(self.load_ed25519_private_key_file)
+        self.btn_load_ed25519_public_key.clicked.connect(self.load_ed25519_public_key_file)
+
         self.username_entry.setText(self.current_username)
         self.auth_port_entry.setText(str(self.auth_port))
         self.comm_port_entry.setText(str(self.comm_port))
@@ -49,10 +53,15 @@ class MainWindow(QMainWindow):
     def handle_error(self, title, message):
         self.app_service.show_error(title, message)
 
+    @Slot(str)
+    def handle_specific_chat_error(self, message):
+        self.show_dialog("Erro no Chat", message)
+        self.on_chat_disconnected()
+
     def set_original_streams(self, stdout, stderr):
         self.original_stdout = stdout
         self.original_stderr = stderr
-        self.app_service = AppService(self, self.original_stdout, self.original_stderr)
+        self.app_service = AppService(self, self.original_stdout, self.original_stderr, self.ecc_manager)
 
     @Slot(str)
     def append_log_message(self, message):
@@ -117,6 +126,35 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def on_host_clicked(self):
+        if not self.ecc_manager.has_ed25519_private_key():
+            reply = QMessageBox.question(self, "Chave Ed25519 Ausente",
+                                         "Nenhuma chave privada Ed25519 foi carregada para assinatura do chat. Deseja gerar e salvar uma nova chave pública agora?",
+                                         QMessageBox.Yes | QMessageBox.No)
+            if reply == QMessageBox.Yes:
+                try:
+                    self.ecc_manager.generate_ed25519_keys()
+                    public_key_pem = self.ecc_manager.get_ed25519_public_key_pem()
+                    
+                    file_path, _ = QFileDialog.getSaveFileName(self, "Salvar Chave Pública Ed25519", "ed25519_public_key.pem", "PEM Files (*.pem);;All Files (*)")
+                    if file_path:
+                        with open(file_path, "wb") as f:
+                            f.write(public_key_pem)
+                        self.show_dialog("Sucesso", f"Chave pública Ed25519 salva em: {file_path}")          
+                        self.ecc_manager.load_ed25519_public_key(public_key_pem)
+                        self.ed25519_public_key_path.setText(file_path)
+                    else:
+                        self.show_dialog("Aviso", "Operação de salvar chave pública cancelada. O servidor pode não funcionar corretamente sem uma chave de assinatura.")                      
+                        return
+                except Exception as e:
+                    self.show_dialog("Erro", f"Erro ao gerar/salvar chave Ed25519: {e}")
+                    return 
+            else:
+                self.show_dialog("Aviso", "O servidor de chat pode não funcionar corretamente sem uma chave privada Ed25519 para assinatura.")
+                
+        if not self.ecc_manager.has_ed25519_public_key():
+            self.show_dialog("Erro", "Nenhuma chave pública Ed25519 foi carregada. O servidor precisa da sua chave pública para verificar a si mesmo e para que os clientes a usem.")
+            return
+
         self.app_service.handle_host_clicked()
 
     @Slot()
@@ -143,6 +181,34 @@ class MainWindow(QMainWindow):
         self.no_chat_label.show()
         self.show_home_page()
         self.show_dialog("Conexão Encerrada", "A conexão com o chat foi perdida.")
+
+    @Slot()
+    def load_ed25519_private_key_file(self):
+        file_path, _ = QFileDialog.getOpenFileName(self, "Carregar Chave Privada Ed25519", "", "PEM Files (*.pem);;All Files (*)")
+        if file_path:
+            try:
+                with open(file_path, "rb") as f:
+                    key_bytes = f.read()
+                self.ecc_manager.load_ed25519_private_key(key_bytes)
+                self.ed25519_private_key_path.setText(file_path)
+                self.show_dialog("Sucesso", "Chave privada Ed25519 carregada com sucesso!")
+            except Exception as e:
+                self.show_dialog("Erro", f"Erro ao carregar chave privada Ed25519: {e}")
+                self.ed25519_private_key_path.clear()
+
+    @Slot()
+    def load_ed25519_public_key_file(self):
+        file_path, _ = QFileDialog.getOpenFileName(self, "Carregar Chave Pública Ed25519", "", "PEM Files (*.pem);;All Files (*)")
+        if file_path:
+            try:
+                with open(file_path, "rb") as f:
+                    key_bytes = f.read()
+                self.ecc_manager.load_ed25519_public_key(key_bytes)
+                self.ed25519_public_key_path.setText(file_path)
+                self.show_dialog("Sucesso", "Chave pública Ed25519 carregada com sucesso!")
+            except Exception as e:
+                self.show_dialog("Erro", f"Erro ao carregar chave pública Ed25519: {e}")
+                self.ed25519_public_key_path.clear()
 
     def setup_chat_widget(self, is_host: bool):
         self.no_chat_label.hide()

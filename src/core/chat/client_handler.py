@@ -2,8 +2,9 @@ import traceback
 import socket
 from PySide6.QtCore import QObject, Signal, Slot
 from src.core.chat.globals import clientes_lock, handlers, authenticated_ips, authenticated_ips_lock, client_aes_keys, client_aes_keys_lock, connected_users, connected_users_lock
-from src.core.auth.rsa_manager import RSAManager
+from src.core.crypto.ecc_manager import ECCManager
 from src.core.crypto.aes_manager import AESManager 
+from cryptography.hazmat.primitives.asymmetric import ed25519
 
 class ClientHandler(QObject): 
 
@@ -11,7 +12,7 @@ class ClientHandler(QObject):
     client_status_for_host = Signal(str)
     user_list_updated = Signal()
 
-    def __init__(self, client_socket, addr): 
+    def __init__(self, client_socket, addr, host_ed25519_private_key: ed25519.Ed25519PrivateKey, host_ed25519_public_key_bytes: bytes): 
         super().__init__()
         self.client_socket = client_socket
         self.addr = addr
@@ -19,7 +20,16 @@ class ClientHandler(QObject):
         self._running = True
         self.client_socket.settimeout(1.0)
         self.aes_manager = None 
-        self.rsa_manager_temp = RSAManager() 
+        self.ecc_manager = ECCManager() 
+        
+        if host_ed25519_private_key:
+            self.ecc_manager._ed25519_private_key = host_ed25519_private_key
+            self.ecc_manager._ed25519_public_key = host_ed25519_private_key.public_key()
+        elif host_ed25519_public_key_bytes:
+            self.ecc_manager.load_ed25519_public_key(host_ed25519_public_key_bytes) 
+                  
+        self.host_ed25519_private_key = host_ed25519_private_key 
+        self.host_ed25519_public_key_bytes = host_ed25519_public_key_bytes
 
     def stop(self): 
         self._running = False
@@ -35,34 +45,55 @@ class ClientHandler(QObject):
         with clientes_lock:
             handlers.append(self) 
         try:
-            self.client_status_for_host.emit(f"[ClientHandler] Iniciando handshake de chave AES com {self.addr[0]}...")
+            self.client_status_for_host.emit(f"[ClientHandler] Iniciando handshake de chave ECC com {self.addr[0]}...")
             try:
-                self.rsa_manager_temp.generate_temp_keys()
-                public_key_bytes = self.rsa_manager_temp.get_public_key_bytes()
-                self.client_socket.sendall(public_key_bytes)
-                self.client_status_for_host.emit(f"[ClientHandler] Chave pública RSA enviada para {self.addr[0]}.")
-            
-                encrypted_aes_key_b64 = self.client_socket.recv(2048).decode('utf-8')               
-                encrypted_aes_key = AESManager.base64_to_bytes(encrypted_aes_key_b64)
-                self.client_status_for_host.emit(f"[ClientHandler] Chave AES criptografada recebida de {self.addr[0]}.")
+                self.ecc_manager.generate_x25519_keys()
+                server_x25519_public_bytes = self.ecc_manager.get_x25519_public_key_bytes()
+                
+                signature = self.ecc_manager.sign_data(server_x25519_public_bytes)
 
-                aes_key_bytes = self.rsa_manager_temp.decrypt_bytes(encrypted_aes_key)
-                self.aes_manager = AESManager(aes_key_bytes)
-                self.client_status_for_host.emit(f"[ClientHandler] Chave AES descriptografada para {self.addr[0]}.")
+                handshake_data = f"{ECCManager.bytes_to_base64(server_x25519_public_bytes)}|{ECCManager.bytes_to_base64(signature)}|{ECCManager.bytes_to_base64(self.host_ed25519_public_key_bytes)}"
+                self.client_socket.sendall(handshake_data.encode('utf-8'))
+                self.client_status_for_host.emit(f"[ClientHandler] Chaves X25519 e Ed25519 do servidor enviadas para {self.addr[0]}.")
+
+                client_handshake_response_b64 = self.client_socket.recv(2048).decode('utf-8')
+                parts = client_handshake_response_b64.split('|')
+                if len(parts) != 3:
+                    raise ValueError("Formato de handshake do cliente inválido.")
+                
+                client_x25519_public_b64 = parts[0]
+                client_signature_b64 = parts[1]
+                client_ed25519_public_b64 = parts[2] 
+
+                client_x25519_public_bytes = ECCManager.base64_to_bytes(client_x25519_public_b64)
+                client_signature_bytes = ECCManager.base64_to_bytes(client_signature_b64)
+                client_ed25519_public_bytes = ECCManager.base64_to_bytes(client_ed25519_public_b64)
+
+                self.client_status_for_host.emit(f"[ClientHandler] Chaves X25519 e Ed25519 do cliente recebidas de {self.addr[0]}.")
+
+                if not ECCManager.verify_signature(client_ed25519_public_bytes, client_x25519_public_bytes, client_signature_bytes):
+                    raise Exception("Falha na verificação da assinatura da chave X25519 do cliente.")
+                self.client_status_for_host.emit(f"[ClientHandler] Assinatura da chave X25519 do cliente verificada com sucesso para {self.addr[0]}.")
+
+                derived_aes_key = self.ecc_manager.derive_shared_key(client_x25519_public_bytes)
+                self.aes_manager = AESManager(derived_aes_key)
+                self.client_status_for_host.emit(f"[ClientHandler] Chave AES derivada para {self.addr[0]}.")
 
                 with client_aes_keys_lock:
                     client_aes_keys[self.addr[0]] = self.aes_manager.get_key()
-                self.rsa_manager_temp.clear_keys() 
-                self.client_socket.sendall(b"AES_HANDSHAKE_SUCCESS")
-                self.client_status_for_host.emit(f"[ClientHandler] Handshake AES concluído com {self.addr[0]}.")
+                
+                self.ecc_manager.clear_x25519_keys() 
+
+                self.client_socket.sendall(b"ECC_HANDSHAKE_SUCCESS")
+                self.client_status_for_host.emit(f"[ClientHandler] Handshake ECC concluído com {self.addr[0]}.")
 
             except Exception as e:
-                self.client_status_for_host.emit(f"[ClientHandler] ERRO no handshake AES com {self.addr[0]}: {e}")
+                self.client_status_for_host.emit(f"[ClientHandler] ERRO no handshake ECC com {self.addr[0]}: {e}")
                 print(f"[ClientHandler DEBUG] ERRO DETALHADO: {e}")
                 traceback.print_exc()
-                self.client_socket.sendall(b"AES_HANDSHAKE_FAILURE")
+                self.client_socket.sendall(b"ECC_HANDSHAKE_FAILURE")
                 self.client_socket.close()
-                return 
+                return  
 
             try:
                 encrypted_username_b64 = self.client_socket.recv(1024).decode('utf-8').strip()

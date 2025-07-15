@@ -7,15 +7,17 @@ from src.services.auth_service import AuthService
 from src.config.settings import DEFAULT_USERNAME, DEFAULT_AUTH_PORT, DEFAULT_COMM_PORT
 from src.core.chat.globals import authenticated_ips, authenticated_ips_lock, temp_rsa_managers, temp_rsa_managers_lock, connected_users, connected_users_lock
 import socket
+from src.core.crypto.ecc_manager import ECCManager
 from src.gui.dialogs import JoinOptionDialog 
 
 class AppService:
-    def __init__(self, main_window_instance, original_stdout, original_stderr):
+    def __init__(self, main_window_instance, original_stdout, original_stderr, ecc_manager):
         self.main_window = main_window_instance
         self.auth_service = AuthService()
         self.chat_client_instance = None
         self.chat_server_thread = None
         self.is_connected_to_chat = False
+        self.ecc_manager = ecc_manager
 
     def show_error(self, title, message, critical=False):
         message_box = QMessageBox(self.main_window)
@@ -54,9 +56,13 @@ class AppService:
             for ip in ips_locais: 
                 authenticated_ips.add(ip)
 
+        host_ed25519_private_key = self.ecc_manager._ed25519_private_key 
+        host_ed25519_public_key_bytes = self.ecc_manager.get_ed25519_public_key_pem()
+
         self.chat_server_thread = threading.Thread(
             target=start_server,
-            args=(self.main_window.chat_widget_instance, self.main_window.comm_port),
+            args=(self.main_window.chat_widget_instance, self.main_window.comm_port, 
+                  host_ed25519_private_key, host_ed25519_public_key_bytes), 
             daemon=True
         )
         self.chat_server_thread.start()
@@ -92,16 +98,28 @@ class AppService:
 
         self.main_window.setup_chat_widget(is_host=False)
 
-        self.chat_client_instance = ChatClient(server_ip, self.main_window.comm_port, self.main_window.chat_widget_instance, username)
+        client_ed25519_public_key_bytes = None
+        if self.ecc_manager.has_ed25519_public_key():
+            client_ed25519_public_key_bytes = self.ecc_manager.get_ed25519_public_key_pem()
+        else:
+            self.show_dialog("Aviso", "Nenhuma chave pública Ed25519 carregada. A verificação de assinatura do servidor pode falhar.")
+           
+        self.chat_client_instance = ChatClient(
+            server_ip, 
+            self.main_window.comm_port, 
+            self.main_window.chat_widget_instance, 
+            username,
+            self.ecc_manager 
+        )
         self.main_window.chat_widget_instance.client = self.chat_client_instance
 
         self.chat_client_instance.connect()
 
         if self.chat_client_instance.worker:
-            if self.main_window.chat_widget_instance:
-                self.chat_client_instance.worker.message_received.connect(self.main_window.chat_widget_instance.add_message_to_chat)
-                self.chat_client_instance.worker.connection_error.connect(self.main_window.chat_widget_instance.add_message_to_chat)
-                self.chat_client_instance.worker.disconnected.connect(self.main_window.on_chat_disconnected)
+            self.chat_client_instance.worker.message_received.connect(self.main_window.chat_widget_instance.add_message_to_chat)
+            self.chat_client_instance.worker.connection_error.connect(self.main_window.chat_widget_instance.add_message_to_chat)
+            self.chat_client_instance.worker.disconnected.connect(self.main_window.on_chat_disconnected)
+            self.chat_client_instance.worker.specific_error.connect(self.main_window.handle_specific_chat_error)
 
             self.is_connected_to_chat = True
             self.main_window.show_chat_page()
