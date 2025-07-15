@@ -5,6 +5,7 @@ from src.core.chat.globals import clientes_lock, handlers, authenticated_ips, au
 from src.core.crypto.ecc_manager import ECCManager
 from src.core.crypto.aes_manager import AESManager 
 from cryptography.hazmat.primitives.asymmetric import ed25519
+from src.core.network.dos_detector import DoSDetector
 
 class ClientHandler(QObject): 
 
@@ -12,23 +13,28 @@ class ClientHandler(QObject):
     client_status_for_host = Signal(str)
     user_list_updated = Signal()
 
-    def __init__(self, client_socket, addr, host_ed25519_private_key: ed25519.Ed25519PrivateKey, host_ed25519_public_key_bytes: bytes): 
+    def __init__(self, client_socket, addr, host_ed25519_private_key: ed25519.Ed25519PrivateKey, host_ed25519_public_key_bytes: bytes, dos_detector: DoSDetector): 
         super().__init__()
         self.client_socket = client_socket
         self.addr = addr
-        self.username = f"[{addr[0]}]"
+        self.username = f"[{addr[0]}]" 
         self._running = True
-        self.client_socket.settimeout(1.0)
+        self.client_socket.settimeout(5.0) 
         self.aes_manager = None 
-        self.ecc_manager = ECCManager() 
+        self.ecc_manager = ECCManager()
+        self.dos_detector = dos_detector
         
         if host_ed25519_private_key:
             self.ecc_manager._ed25519_private_key = host_ed25519_private_key
             self.ecc_manager._ed25519_public_key = host_ed25519_private_key.public_key()
+            print(f"[DEBUG] [ClientHandler] Chave privada Ed25519 do host carregada para {self.addr[0]}.")
         elif host_ed25519_public_key_bytes:
-            self.ecc_manager.load_ed25519_public_key(host_ed25519_public_key_bytes) 
-                  
-        self.host_ed25519_private_key = host_ed25519_private_key 
+            self.ecc_manager.load_ed25519_public_key(host_ed25519_public_key_bytes)
+            print(f"[WARNING] [ClientHandler] Apenas chave pública Ed25519 do host carregada para {self.addr[0]}. Assinatura não será possível.")
+        else:
+            print(f"[ERROR] [ClientHandler] Nenhuma chave Ed25519 do host fornecida para {self.addr[0]}. Handshake ECC pode falhar.")
+
+        self.host_ed25519_private_key = host_ed25519_private_key
         self.host_ed25519_public_key_bytes = host_ed25519_public_key_bytes
 
     def stop(self): 
@@ -37,63 +43,82 @@ class ClientHandler(QObject):
             if self.client_socket:
                 self.client_socket.shutdown(socket.SHUT_RDWR)
                 self.client_socket.close()
+                print(f"[INFO] [ClientHandler] Socket do cliente {self.username} ({self.addr}) fechado.")
+        except OSError as e:
+            if e.errno != 107: 
+                print(f"[ERROR] [ClientHandler] Erro ao fechar socket do cliente {self.username} ({self.addr}): {e}")
         except Exception as e:
-            print(f"[ClientHandler] Erro ao fechar socket do cliente {self.username}: {e}")        
+            print(f"[CRITICAL] [ClientHandler] Erro inesperado ao fechar socket do cliente {self.username} ({self.addr}): {e}")        
 
     @Slot()
-    def run(self): 
+    def run(self):
         with clientes_lock:
-            handlers.append(self) 
+            handlers.append(self)
+        
+        client_ip = self.addr[0] 
+
         try:
-            self.client_status_for_host.emit(f"[ClientHandler] Iniciando handshake de chave ECC com {self.addr[0]}...")
+            self.client_status_for_host.emit(f"[INFO] Iniciando handshake de chave ECC com {self.addr[0]}...")
+            print(f"[INFO] [ClientHandler] Iniciando handshake de chave ECC com {self.addr[0]}...")
             try:
                 self.ecc_manager.generate_x25519_keys()
                 server_x25519_public_bytes = self.ecc_manager.get_x25519_public_key_bytes()
+
+                if not self.ecc_manager.has_ed25519_private_key():
+                    raise Exception("Chave privada Ed25519 do host não carregada para assinar a chave X25519. Handshake ECC não pode ser seguro.")
                 
                 signature = self.ecc_manager.sign_data(server_x25519_public_bytes)
+                print(f"[DEBUG] [ClientHandler] Chave X25519 do servidor assinada.")
 
-                handshake_data = f"{ECCManager.bytes_to_base64(server_x25519_public_bytes)}|{ECCManager.bytes_to_base64(signature)}|{ECCManager.bytes_to_base64(self.host_ed25519_public_key_bytes)}"
+                handshake_data = f"{ECCManager.bytes_to_base64(server_x25519_public_bytes)}|{AESManager.bytes_to_base64(signature)}|{AESManager.bytes_to_base64(self.host_ed25519_public_key_bytes)}"
                 self.client_socket.sendall(handshake_data.encode('utf-8'))
-                self.client_status_for_host.emit(f"[ClientHandler] Chaves X25519 e Ed25519 do servidor enviadas para {self.addr[0]}.")
+                self.client_status_for_host.emit(f"[INFO] Chaves X25519 e Ed25519 do servidor enviadas para {self.addr[0]}.")
+                print(f"[INFO] [ClientHandler] Chaves X25519 e Ed25519 do servidor enviadas para {self.addr[0]}.")
 
-                client_handshake_response_b64 = self.client_socket.recv(2048).decode('utf-8')
-                parts = client_handshake_response_b64.split('|')
-                if len(parts) != 3:
-                    raise ValueError("Formato de handshake do cliente inválido.")
-                
-                client_x25519_public_b64 = parts[0]
-                client_signature_b64 = parts[1]
-                client_ed25519_public_b64 = parts[2] 
+                client_handshake_response_b64 = self.client_socket.recv(2048).decode('utf-8').strip()
+                client_x25519_public_b64 = client_handshake_response_b64
+
+                if not client_x25519_public_b64:
+                    raise ValueError("Chave pública X25519 do cliente não recebida ou vazia.")
 
                 client_x25519_public_bytes = ECCManager.base64_to_bytes(client_x25519_public_b64)
-                client_signature_bytes = ECCManager.base64_to_bytes(client_signature_b64)
-                client_ed25519_public_bytes = ECCManager.base64_to_bytes(client_ed25519_public_b64)
-
-                self.client_status_for_host.emit(f"[ClientHandler] Chaves X25519 e Ed25519 do cliente recebidas de {self.addr[0]}.")
-
-                if not ECCManager.verify_signature(client_ed25519_public_bytes, client_x25519_public_bytes, client_signature_bytes):
-                    raise Exception("Falha na verificação da assinatura da chave X25519 do cliente.")
-                self.client_status_for_host.emit(f"[ClientHandler] Assinatura da chave X25519 do cliente verificada com sucesso para {self.addr[0]}.")
+                self.client_status_for_host.emit(f"[INFO] Chave X25519 do cliente recebida de {self.addr[0]}.")
+                print(f"[INFO] [ClientHandler] Chave X25519 do cliente recebida de {self.addr[0]}.")
 
                 derived_aes_key = self.ecc_manager.derive_shared_key(client_x25519_public_bytes)
                 self.aes_manager = AESManager(derived_aes_key)
-                self.client_status_for_host.emit(f"[ClientHandler] Chave AES derivada para {self.addr[0]}.")
+                self.client_status_for_host.emit(f"[INFO] Chave AES derivada para {self.addr[0]}.")
+                print(f"[INFO] [ClientHandler] Chave AES derivada para {self.addr[0]}.")
 
                 with client_aes_keys_lock:
                     client_aes_keys[self.addr[0]] = self.aes_manager.get_key()
-                
+                    print(f"[DEBUG] [ClientHandler] Chave AES armazenada para {self.addr[0]}.")
+
                 self.ecc_manager.clear_x25519_keys() 
+                print(f"[DEBUG] [ClientHandler] Chaves X25519 efêmeras limpas.")
 
                 self.client_socket.sendall(b"ECC_HANDSHAKE_SUCCESS")
-                self.client_status_for_host.emit(f"[ClientHandler] Handshake ECC concluído com {self.addr[0]}.")
+                self.client_status_for_host.emit(f"[SUCCESS] Handshake ECC concluído com {self.addr[0]}.")
+                print(f"[SUCCESS] [ClientHandler] Handshake ECC concluído com {self.addr[0]}.")
 
-            except Exception as e:
-                self.client_status_for_host.emit(f"[ClientHandler] ERRO no handshake ECC com {self.addr[0]}: {e}")
-                print(f"[ClientHandler DEBUG] ERRO DETALHADO: {e}")
-                traceback.print_exc()
+            except socket.timeout:
+                self.client_status_for_host.emit(f"[ERROR] Timeout durante o handshake ECC com {self.addr[0]}.")
+                print(f"[ERROR] [ClientHandler] Timeout durante o handshake ECC com {self.addr[0]}.")
                 self.client_socket.sendall(b"ECC_HANDSHAKE_FAILURE")
                 self.client_socket.close()
-                return  
+                return
+            except ValueError as e:
+                self.client_status_for_host.emit(f"[ERROR] Erro de formato de dados durante o handshake ECC com {self.addr[0]}.")
+                print(f"[ERROR] [ClientHandler] Erro de formato de dados durante o handshake ECC com {self.addr[0]}: {e}")
+                self.client_socket.sendall(b"ECC_HANDSHAKE_FAILURE")
+                self.client_socket.close()
+                return
+            except Exception as e:
+                self.client_status_for_host.emit(f"[ERROR] Falha no handshake ECC com {self.addr[0]}.")
+                print(f"[ERROR] [ClientHandler] Falha no handshake ECC com {self.addr[0]}: {e}")
+                self.client_socket.sendall(b"ECC_HANDSHAKE_FAILURE")
+                self.client_socket.close()
+                return 
 
             try:
                 encrypted_username_b64 = self.client_socket.recv(1024).decode('utf-8').strip()
@@ -107,14 +132,15 @@ class ClientHandler(QObject):
                         try: 
                             decrypted_username = self.aes_manager.decrypt(nonce, ciphertext, tag)
                             self.username = decrypted_username
-                            self.client_status_for_host.emit(f"[ClientHandler] Cliente '{self.username}' conectado.")
+                            self.client_status_for_host.emit(f"[INFO] Cliente '{self.username}' ({self.addr[0]}) conectado.")
+                            print(f"[INFO] [ClientHandler] Cliente '{self.username}' ({self.addr[0]}) conectado.")
                         except Exception as e:
-                            print(f"[ClientHandler] ERRO ao descriptografar nome de usuário de {self.addr}: {e}")
-                            self.client_status_for_host.emit(f"[ClientHandler] ERRO ao descriptografar nome de usuário de {self.addr}: {e}")
+                            self.client_status_for_host.emit(f"[ERROR] Erro ao descriptografar nome de usuário de {self.addr[0]}. Conexão encerrada.")
+                            print(f"[ERROR] [ClientHandler] ERRO ao descriptografar nome de usuário de {self.addr[0]}: {e}")
                             self.client_socket.close()
                             return
                 else:
-                    print(f"[ClientHandler] Cliente {self.addr} desconectou antes de enviar o nome.")
+                    print(f"[WARNING] [ClientHandler] Cliente {self.addr[0]} desconectou antes de enviar o nome de usuário.")
                     self.client_socket.close()
                     return
                 
@@ -124,13 +150,14 @@ class ClientHandler(QObject):
                         "handler": self
                     }
                 self.user_list_updated.emit()                
+                print(f"[INFO] [ClientHandler] Usuário {self.username} adicionado à lista de conectados.")
                 
             except socket.timeout: 
-                print(f"[ClientHandler] Timeout ao esperar nome de usuário de {self.addr}. Usando IP.")
+                print(f"[WARNING] [ClientHandler] Timeout ao esperar nome de usuário de {self.addr[0]}. Cliente desconectado.")
                 self.client_socket.close()
                 return
             except Exception as e:
-                print(f"[ClientHandler] Erro ao receber nome de usuário de {self.addr}: {e}. Usando IP.")
+                print(f"[ERROR] [ClientHandler] Erro ao receber nome de usuário de {self.addr[0]}: {e}. Cliente desconectado.")
                 self.client_socket.close()
                 return
 
@@ -138,8 +165,12 @@ class ClientHandler(QObject):
                 try:
                     encrypted_message_b64 = self.client_socket.recv(2048).decode('utf-8') 
                     if not encrypted_message_b64: 
-                        print(f"[ClientHandler] Cliente {self.username} ({self.addr}) desconectou")
+                        print(f"[INFO] [ClientHandler] Cliente {self.username} ({self.addr[0]}) desconectou (recebeu dados vazios).")
                         break
+
+                    if not self.dos_detector.check_and_record(client_ip):
+                        print(f"[WARNING] [ClientHandler] Mensagem de {self.username} ({self.addr[0]}) bloqueada por DoSDetector.")                                            
+                        continue
 
                     parts = encrypted_message_b64.split('|')
                     if len(parts) == 3:
@@ -150,44 +181,60 @@ class ClientHandler(QObject):
                         try:
                             mensagem_descriptografada = self.aes_manager.decrypt(nonce, ciphertext, tag)
                             self.new_message_for_host.emit(f"{self.username}: {mensagem_descriptografada}")
+                            print(f"[DEBUG] [ClientHandler] Mensagem de {self.username} recebida e descriptografada: {mensagem_descriptografada[:50]}...")
                             self.broadcast_message(f"{self.username}: {mensagem_descriptografada}", self.client_socket)
                         except Exception as e:
-                            self.new_message_for_host.emit(f"[ClientHandler] ERRO ao descriptografar mensagem de {self.username} ({self.addr}): {e}")
-                            print(f"[ClientHandler] ERRO ao descriptografar mensagem de {self.username} ({self.addr}): {e}")
+                            self.new_message_for_host.emit(f"[ERROR] Erro ao descriptografar mensagem de {self.username} ({self.addr[0]}).")
+                            print(f"[ERROR] [ClientHandler] ERRO ao descriptografar mensagem de {self.username} ({self.addr[0]}): {e}. Dados: {encrypted_message_b64[:100]}...")
                     else:
-                        self.new_message_for_host.emit(f"[ClientHandler] Formato de mensagem inválido de {self.username} ({self.addr}).")
-                        print(f"[ClientHandler] Formato de mensagem inválido de {self.username} ({self.addr}).")
+                        self.new_message_for_host.emit(f"[WARNING] Formato de mensagem inválido de {self.username} ({self.addr[0]}).")
+                        print(f"[WARNING] [ClientHandler] Formato de mensagem inválido de {self.username} ({self.addr[0]}). Dados: {encrypted_message_b64[:100]}...")
 
                 except socket.timeout:
-                    continue  
+                    continue 
+                except ConnectionResetError:
+                    print(f"[ERROR] [ClientHandler] Conexão reiniciada por {self.username} ({self.addr[0]}).")
+                    self.new_message_for_host.emit(f"[ERROR] Conexão com {self.username} ({self.addr[0]}) foi reiniciada.")
+                    break
+                except UnicodeDecodeError:
+                    print(f"[ERROR] [ClientHandler] Erro de decodificação Unicode na mensagem de {self.username} ({self.addr[0]}).")
+                    self.new_message_for_host.emit(f"[ERROR] Erro de decodificação na mensagem de {self.username} ({self.addr[0]}).")
+                    break
                 except Exception as e:
-                    if self._running:
-                        print(f"[ClientHandler] Erro com cliente {self.username} ({self.addr}): {e}")
-                        self.new_message_for_host.emit(f"[ClientHandler] Erro com cliente {self.username} ({self.addr}): {e}")
+                    if self._running: 
+                        print(f"[CRITICAL] [ClientHandler] Erro inesperado com cliente {self.username} ({self.addr[0]}): {e}")
+                        self.new_message_for_host.emit(f"[ERROR] Erro inesperado com cliente {self.username} ({self.addr[0]}).")
                     break
 
         finally: 
             with clientes_lock:
                 if self in handlers:
                     handlers.remove(self) 
+                    print(f"[INFO] [ClientHandler] Handler para {self.username} ({self.addr[0]}) removido da lista global.")
                     
-            client_ip = self.addr[0]
             with authenticated_ips_lock:
                 if client_ip in authenticated_ips:
                     authenticated_ips.remove(client_ip)
+                    print(f"[INFO] [ClientHandler] IP {client_ip} removido da lista de IPs autenticados.")
             
             with client_aes_keys_lock: 
                 if client_ip in client_aes_keys:
                     del client_aes_keys[client_ip]
-                    self.client_status_for_host.emit(f"[ClientHandler] Chave AES de {client_ip} removida.")
+                    self.client_status_for_host.emit(f"[INFO] Chave AES de {client_ip} removida.")
+                    print(f"[INFO] [ClientHandler] Chave AES de {client_ip} removida.")
                     
             with connected_users_lock:
                 if client_ip in connected_users:
                     del connected_users[client_ip]
+                    print(f"[INFO] [ClientHandler] Usuário {self.username} ({client_ip}) removido da lista de usuários conectados.")
             self.user_list_updated.emit()                    
 
-            self.client_socket.close()
-            self.client_status_for_host.emit(f"[ClientHandler] Cliente '{self.username}' desconectado.")
+            try:
+                self.client_socket.close()
+            except Exception as e:
+                print(f"[ERROR] [ClientHandler] Erro ao fechar socket no bloco finally para {self.username} ({self.addr[0]}): {e}")
+            self.client_status_for_host.emit(f"[INFO] Cliente '{self.username}' ({self.addr[0]}) desconectado.")
+            print(f"[INFO] [ClientHandler] Cliente '{self.username}' ({self.addr[0]}) desconectado. Thread encerrada.")
 
     def send_to_client(self, message: str): 
         try:
@@ -195,14 +242,24 @@ class ClientHandler(QObject):
                 nonce, ciphertext, tag = self.aes_manager.encrypt(message)
                 encrypted_data_b64 = f"{AESManager.bytes_to_base64(nonce)}|{AESManager.bytes_to_base64(ciphertext)}|{AESManager.bytes_to_base64(tag)}"
                 self.client_socket.sendall(encrypted_data_b64.encode('utf-8'))
+                print(f"[DEBUG] [ClientHandler] Mensagem enviada para {self.username} ({self.addr[0]}): {message[:50]}...")
             elif not self.aes_manager:
-                print(f"[ClientHandler] Não foi possível enviar para {self.username} ({self.addr}): Chave AES não estabelecida.")
+                print(f"[WARNING] [ClientHandler] Não foi possível enviar para {self.username} ({self.addr[0]}): Chave AES não estabelecida.")
+            else:
+                print(f"[WARNING] [ClientHandler] Tentativa de enviar mensagem para cliente {self.username} ({self.addr[0]}) que não está mais rodando.")
+        except BrokenPipeError:
+            print(f"[ERROR] [ClientHandler] Conexão quebrada ao tentar enviar para {self.username} ({self.addr[0]}). Cliente pode ter desconectado abruptamente.")
+            self.stop() 
         except Exception as e:
-            print(f"[ClientHandler] Erro ao enviar para {self.username} ({self.addr}): {e}")
+            print(f"[ERROR] [ClientHandler] Erro ao enviar para {self.username} ({self.addr[0]}): {e}")
 
     def broadcast_message(self, message: str, sender_socket=None): 
         with clientes_lock:
             current_handlers = handlers.copy()
+
+        if not current_handlers:
+            print("[INFO] [ClientHandler] Nenhum outro cliente para broadcast.")
+            return
 
         for handler in current_handlers:
             if handler.client_socket != sender_socket and handler._running:
@@ -215,8 +272,12 @@ class ClientHandler(QObject):
                         nonce, ciphertext, tag = dest_aes_manager.encrypt(message)
                         encrypted_data_b64 = f"{AESManager.bytes_to_base64(nonce)}|{AESManager.bytes_to_base64(ciphertext)}|{AESManager.bytes_to_base64(tag)}"
                         handler.client_socket.sendall(encrypted_data_b64.encode('utf-8'))
+                        print(f"[DEBUG] [ClientHandler] Mensagem broadcast criptografada para {handler.username} ({handler.addr[0]}): {message[:50]}...")
                     else:
-                        print(f"[ClientHandler] ERRO: Chave AES não encontrada para {handler.username} ({handler.addr}). Não foi possível fazer broadcast.")
+                        print(f"[WARNING] [ClientHandler] ERRO: Chave AES não encontrada para {handler.username} ({handler.addr[0]}). Não foi possível fazer broadcast.")
+                except BrokenPipeError:
+                    print(f"[ERROR] [ClientHandler] Conexão quebrada ao tentar broadcast para {handler.username} ({handler.addr[0]}).")
+                    handler.stop() 
                 except Exception as e:
-                    print(f"[ClientHandler] Erro no broadcast criptografado para {handler.username} ({handler.addr}): {e}")
+                    print(f"[ERROR] [ClientHandler] Erro no broadcast criptografado para {handler.username} ({handler.addr[0]}): {e}")
 

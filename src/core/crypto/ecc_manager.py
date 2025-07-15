@@ -21,6 +21,7 @@ class ECCManager:
     def get_x25519_public_key_bytes(self) -> bytes:
         """Retorna a chave pública X25519 em formato bytes."""
         if not self._x25519_public_key:
+            print("[ERROR] [ECCManager] Tentativa de obter chave pública X25519 antes de ser gerada.")
             raise ValueError("Chave pública X25519 não gerada.")
         return self._x25519_public_key.public_bytes(
             encoding=serialization.Encoding.Raw,
@@ -38,19 +39,25 @@ class ECCManager:
             A chave simétrica derivada (32 bytes para AES-256).
         """
         if not self._x25519_private_key:
+            print("[ERROR] [ECCManager] Tentativa de derivar chave compartilhada sem chave privada X25519 gerada.")
             raise ValueError("Chave privada X25519 não carregada/gerada.")
+        
+        try:
+            peer_public_key = x25519.X25519PublicKey.from_public_bytes(peer_x25519_public_bytes)
+            shared_key = self._x25519_private_key.exchange(peer_public_key)
 
-        peer_public_key = x25519.X25519PublicKey.from_public_bytes(peer_x25519_public_bytes)
-        shared_key = self._x25519_private_key.exchange(peer_public_key)
-
-        hkdf = HKDF(
-            algorithm=hashes.SHA256(),
-            length=32,  
-            salt=salt if salt else b"wifi-chat-salt",
-            info=info if info else b"aes-gcm-key-derivation",
-            backend=default_backend()
-        )
-        return hkdf.derive(shared_key)
+            hkdf = HKDF(
+                algorithm=hashes.SHA256(),
+                length=32,  
+                salt=salt if salt else b"wifi-chat-salt",
+                info=info if info else b"aes-gcm-key-derivation",
+                backend=default_backend()
+            )
+            derived_key = hkdf.derive(shared_key)
+            return derived_key
+        except Exception as e:
+            print(f"[ERROR] [ECCManager] Erro ao derivar chave compartilhada: {e}")
+            raise
 
     def generate_ed25519_keys(self):
         """Gera um novo par de chaves Ed25519."""
@@ -59,23 +66,32 @@ class ECCManager:
 
     def load_ed25519_private_key(self, key_bytes: bytes, password: bytes = None):
         """Carrega uma chave privada Ed25519 de bytes."""
-        self._ed25519_private_key = serialization.load_pem_private_key(
-            key_bytes,
-            password=password,
-            backend=default_backend()
-        )
-        self._ed25519_public_key = self._ed25519_private_key.public_key()
+        try:
+            self._ed25519_private_key = serialization.load_pem_private_key(
+                key_bytes,
+                password=password,
+                backend=default_backend()
+            )
+            self._ed25519_public_key = self._ed25519_private_key.public_key()
+        except Exception as e:
+            print(f"[ERROR] [ECCManager] Erro ao carregar chave privada Ed25519: {e}")
+            raise
 
     def load_ed25519_public_key(self, key_bytes: bytes):
         """Carrega uma chave pública Ed25519 de bytes."""
-        self._ed25519_public_key = serialization.load_pem_public_key(
-            key_bytes,
-            backend=default_backend()
-        )
+        try:
+            self._ed25519_public_key = serialization.load_pem_public_key(
+                key_bytes,
+                backend=default_backend()
+            )
+        except Exception as e:
+            print(f"[ERROR] [ECCManager] Erro ao carregar chave pública Ed25519: {e}")
+            raise
 
     def get_ed25519_public_key_pem(self) -> bytes:
         """Retorna a chave pública Ed25519 em formato PEM."""
         if not self._ed25519_public_key:
+            print("[ERROR] [ECCManager] Tentativa de obter chave pública Ed25519 antes de ser carregada/gerada.")
             raise ValueError("Chave pública Ed25519 não carregada/gerada.")
         return self._ed25519_public_key.public_bytes(
             encoding=serialization.Encoding.PEM,
@@ -85,6 +101,7 @@ class ECCManager:
     def get_ed25519_private_key_pem(self, password: bytes = None) -> bytes:
         """Retorna a chave privada Ed25519 em formato PEM."""
         if not self._ed25519_private_key:
+            print("[ERROR] [ECCManager] Tentativa de obter chave privada Ed25519 antes de ser carregada/gerada.")
             raise ValueError("Chave privada Ed25519 não carregada/gerada.")
         return self._ed25519_private_key.private_bytes(
             encoding=serialization.Encoding.PEM,
@@ -95,8 +112,14 @@ class ECCManager:
     def sign_data(self, data: bytes) -> bytes:
         """Assina dados usando a chave privada Ed25519."""
         if not self._ed25519_private_key:
+            print("[ERROR] [ECCManager] Tentativa de assinar dados sem chave privada Ed25519 carregada.")
             raise ValueError("Chave privada Ed25519 não carregada.")
-        return self._ed25519_private_key.sign(data)
+        try:
+            signature = self._ed25519_private_key.sign(data)
+            return signature
+        except Exception as e:
+            print(f"[ERROR] [ECCManager] Erro ao assinar dados: {e}")
+            raise
 
     @staticmethod
     def verify_signature(public_key_bytes: bytes, data: bytes, signature: bytes) -> bool:
@@ -109,7 +132,7 @@ class ECCManager:
             public_key.verify(signature, data)
             return True
         except Exception as e:
-            print(f"[ECCManager] Erro ao verificar assinatura: {e}")
+            print(f"[ERROR] [ECCManager] Falha na verificação da assinatura: {e}")
             return False
 
     def clear_x25519_keys(self):
