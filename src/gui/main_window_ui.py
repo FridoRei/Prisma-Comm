@@ -250,8 +250,15 @@ class MainWindowUI:
         """)
         ports_group_layout.addWidget(parent.comm_port_entry)
         ports_group_layout.addStretch()
-
         top_settings_layout.addLayout(ports_group_layout)
+                
+        parent.btn_advanced_timeout_options = QPushButton("Opções Avançadas de Timeout")
+        parent.btn_advanced_timeout_options.setStyleSheet(host_join_button_style) 
+        parent.btn_advanced_timeout_options.setCursor(Qt.CursorShape.PointingHandCursor)
+        top_settings_layout.addWidget(parent.btn_advanced_timeout_options)
+        top_settings_layout.addStretch()        
+        ports_group_layout.addStretch()
+        
         top_settings_layout.addStretch()
 
         settings_layout.addWidget(parent.top_settings_container)
@@ -390,6 +397,7 @@ class MainWindowUI:
 
         parent.logs_text_edit = QTextEdit()
         parent.logs_text_edit.setReadOnly(True)
+        parent.logs_text_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         parent.logs_text_edit.setStyleSheet("""
             background-color: #1e1e1f; 
             color: #FFFFFF; 
@@ -411,7 +419,6 @@ class MainWindowUI:
             border-radius: 15px;
             padding: 10px;
         """)
-        logs_layout.addStretch() 
         parent.stacked_widget.addWidget(parent.logs_page)
 
         parent.stacked_widget.setCurrentWidget(parent.home_page)

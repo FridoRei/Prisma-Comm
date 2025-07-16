@@ -3,14 +3,14 @@ from src.services.server import run_auth_server
 from src.core.network.dos_detector import DoSDetector
 
 class AuthService:
-    def __init__(self, auth_port: int, dos_detector: DoSDetector): 
+    def __init__(self, auth_port: int, dos_detector: DoSDetector, host_udp_operation_timeout): 
         self.auth_port = auth_port
         self.dos_detector = dos_detector 
         self.stop_event = threading.Event()
         self.server_thread = None
         self.host_password = None 
 
-    def start_server(self, host_password: str):
+    def start_server(self, host_password: str, host_udp_operation_timeout: int):
         self.host_password = host_password       
         if self.server_thread and self.server_thread.is_alive():
             print("[INFO] [AuthService] Servidor de autenticação já está rodando.")
@@ -19,7 +19,7 @@ class AuthService:
         self.stop_event.clear()
         self.server_thread = threading.Thread(
             target=run_auth_server,
-            args=(self.auth_port, self.stop_event, self.host_password, self.dos_detector),
+            args=(self.auth_port, self.stop_event, self.host_password, self.dos_detector, host_udp_operation_timeout),
             daemon=True,
             name="AuthServerThread" 
         )

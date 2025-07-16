@@ -13,10 +13,12 @@ from cryptography.hazmat.primitives.asymmetric import ed25519
 from src.core.network.dos_detector import DoSDetector
 
 class AppService:
-    def __init__(self, main_window_instance, original_stdout, original_stderr, ecc_manager):
+    def __init__(self, main_window_instance, original_stdout, original_stderr, ecc_manager, timeout_settings: dict):
         self.main_window = main_window_instance
+        self.timeout_settings = timeout_settings
         self.dos_detector = DoSDetector()
-        self.auth_service = AuthService(auth_port=self.main_window.auth_port, dos_detector=self.dos_detector)
+        self.host_udp_operation_timeout = self.timeout_settings['host_udp_operation_timeout']
+        self.auth_service = AuthService(auth_port=self.main_window.auth_port, dos_detector=self.dos_detector, host_udp_operation_timeout=self.host_udp_operation_timeout)
         self.chat_client_instance = None
         self.chat_server_thread = None
         self.is_connected_to_chat = False
@@ -37,9 +39,15 @@ class AppService:
         msg.setIcon(QMessageBox.Information)
         msg.exec()
 
+    def update_timeout_settings(self, new_timeout_settings: dict):
+        """
+        Atualiza as configurações de timeout da aplicação.
+        """
+        self.timeout_settings.update(new_timeout_settings)
+
     def handle_host_clicked(self, host_password: str, host_ed25519_private_key: ed25519.Ed25519PrivateKey):
         try:
-            self.auth_service.start_server(host_password)
+            self.auth_service.start_server(host_password, self.host_udp_operation_timeout)
         except Exception as e:
             self.show_error("Erro ao Iniciar Servidor", f"Não foi possível iniciar o servidor de autenticação: {e}")
             print(f"[CRITICAL] [AppService] Falha ao iniciar servidor de autenticação: {e}")
@@ -65,7 +73,7 @@ class AppService:
         self.chat_server_thread = threading.Thread(
             target=start_server,
             args=(self.main_window.chat_widget_instance, self.main_window.comm_port,
-                  host_ed25519_private_key, self.dos_detector),
+                  host_ed25519_private_key, self.dos_detector, self.timeout_settings['host_client_data_receive_timeout']),
             daemon=True,
             name="ChatServerThread"
         )
@@ -89,8 +97,9 @@ class AppService:
                 print(f"[ERROR] [AppService] Endereço IP inválido ou não encontrado: {server_ip_to_use}")
                 return
 
-            if verificar_conexao_com_host(server_ip_to_use, self.main_window.auth_port, client_password):
-                self.join_hotspot_chat(server_ip_to_use, username, client_ed25519_public_key_bytes)
+            session_token = verificar_conexao_com_host(server_ip_to_use, self.main_window.auth_port, client_password, self.timeout_settings['client_rsa_timeout'], self.timeout_settings['client_password_response_timeout'])
+            if session_token: 
+                self.join_hotspot_chat(server_ip_to_use, username, client_ed25519_public_key_bytes, session_token)
             else:
                 self.show_error("Falha na Autenticação", f"Não foi possível autenticar com {server_ip_to_use}. Verifique a senha e o IP.")
                 print(f"[ERROR] [AppService] Falha na autenticação com {server_ip_to_use}.")
@@ -106,7 +115,7 @@ class AppService:
             print(f"[ERROR] [AppService] Formato de IP inválido: {ip}")
             return False
 
-    def join_hotspot_chat(self, server_ip: str, username: str, client_ed25519_public_key_bytes: bytes):
+    def join_hotspot_chat(self, server_ip: str, username: str, client_ed25519_public_key_bytes: bytes, session_token: str):
         self.disconnect_chat_client()
 
         self.main_window.setup_chat_widget(is_host=False)
@@ -117,7 +126,10 @@ class AppService:
             self.main_window.chat_widget_instance,
             username,
             self.ecc_manager,
-            client_ed25519_public_key_bytes
+            client_ed25519_public_key_bytes,
+            session_token,
+            self.timeout_settings['client_message_receive_timeout'],
+            self.timeout_settings['client_handshake_timeout']
         )
         self.main_window.chat_widget_instance.client = self.chat_client_instance
 

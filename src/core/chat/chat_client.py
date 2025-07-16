@@ -3,7 +3,6 @@ import threading
 from PySide6.QtCore import QObject, Signal, Slot
 from src.core.crypto.ecc_manager import ECCManager
 from src.core.crypto.aes_manager import AESManager
-from src.core.network.connection_manager import client_session_token 
 
 class ChatClientWorker(QObject):
     message_received = Signal(str)
@@ -11,11 +10,12 @@ class ChatClientWorker(QObject):
     disconnected = Signal()
     specific_error = Signal(str)
 
-    def __init__(self, client_socket, aes_manager: AESManager):
+    def __init__(self, client_socket, aes_manager: AESManager, session_token):
         super().__init__()
         self.client_socket = client_socket
         self.aes_manager = aes_manager
         self._running = True
+        self.session_token = session_token
 
     def stop(self):
         self._running = False
@@ -99,7 +99,7 @@ class ChatClientWorker(QObject):
         print("[INFO] [ChatClientWorker] Thread de escuta encerrada.")
 
 class ChatClient:
-    def __init__(self, host_ip, port, chat_widget=None, nome_usuario="Usuário", ecc_manager=None, client_ed25519_public_key_bytes: bytes = None):
+    def __init__(self, host_ip, port, chat_widget=None, nome_usuario="Usuário", ecc_manager=None, client_ed25519_public_key_bytes: bytes = None, session_token: str = None, recive_timeout: int = 1, handshake_timeout: int = 5):
         self.host = host_ip
         self.port = port
         self.chat_widget = chat_widget
@@ -107,9 +107,12 @@ class ChatClient:
         self.nome_usuario = nome_usuario
         self.worker = None
         self.thread = None
+        self.session_token = session_token
         self.aes_manager = AESManager()
         self.ecc_manager = ecc_manager
         self.client_ed25519_public_key_bytes = client_ed25519_public_key_bytes
+        self.recive_timeout = recive_timeout
+        self.handshake_timeout = handshake_timeout
 
     def connect(self):
         if not self.host:
@@ -118,7 +121,7 @@ class ChatClient:
                 self.chat_widget.add_message_to_chat("[ERROR] Gateway não encontrado. Verifique sua rede.")
             return False
 
-        if not client_session_token:
+        if not self.session_token:
             print("[ERROR] [ChatClient] Nenhum token de sessão encontrado. Autentique-se primeiro.")
             if self.chat_widget:
                 self.chat_widget.add_message_to_chat("[ERROR] Nenhum token de sessão. Autentique-se primeiro.")
@@ -126,11 +129,12 @@ class ChatClient:
 
         try:
             print(f"[INFO] [ChatClient] Tentando conectar ao servidor em {self.host}:{self.port}...")
+            self.client_socket.settimeout(self.handshake_timeout)
             self.client_socket.connect((self.host, self.port))
             print(f"[SUCCESS] [ChatClient] Conectado ao servidor em {self.host}:{self.port}")
 
-            self.client_socket.sendall(f"SESSION_TOKEN:{client_session_token}".encode('utf-8'))
-            print(f"[INFO] [ChatClient] Token de sessão enviado para o servidor de chat: {client_session_token[:8]}...")
+            self.client_socket.sendall(f"SESSION_TOKEN:{self.session_token}".encode('utf-8'))
+            print(f"[INFO] [ChatClient] Token de sessão enviado para o servidor de chat: {self.session_token[:50]}...")
 
             token_response = self.client_socket.recv(1024).decode('utf-8').strip()
             if token_response == "TOKEN_ACCEPTED":
@@ -177,7 +181,7 @@ class ChatClient:
             encrypted_username_b64 = f"{AESManager.bytes_to_base64(nonce_username)}|{AESManager.bytes_to_base64(ciphertext_username)}|{AESManager.bytes_to_base64(tag_username)}"
             self.client_socket.sendall(encrypted_username_b64.encode('utf-8'))
 
-            self.worker = ChatClientWorker(self.client_socket, self.aes_manager)
+            self.worker = ChatClientWorker(self.client_socket, self.aes_manager, self.session_token)
 
             if self.chat_widget:
                 self.worker.message_received.connect(self.chat_widget.add_message_to_chat)
@@ -242,7 +246,7 @@ class ChatClient:
         if self.worker:
             self.worker.stop()
             if self.thread and self.thread.is_alive():
-                self.thread.join(timeout=1)
+                self.thread.join(timeout=self.recive_timeout)
                 if self.thread.is_alive():
                     print("[WARNING] [ChatClient] Thread do worker não encerrou em tempo.")
         try:

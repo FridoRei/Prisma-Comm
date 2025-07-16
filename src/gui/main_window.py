@@ -6,7 +6,13 @@ import sys
 from src.gui.main_window_ui import MainWindowUI
 from src.gui.chat_widget import ChatWidget
 from src.services.app_service import AppService
-from src.config.settings import DEFAULT_USERNAME, DEFAULT_AUTH_PORT, DEFAULT_COMM_PORT, ED25519_CHANNELS
+from src.gui.dialogs import PasswordInputDialog, Ed25519ChannelSelectionDialog, AdvancedTimeoutDialog
+from src.config.settings import (
+    DEFAULT_USERNAME, DEFAULT_AUTH_PORT, DEFAULT_COMM_PORT, ED25519_CHANNELS,
+    DEFAULT_CLIENT_RSA_TIMEOUT, DEFAULT_CLIENT_PASSWORD_RESPONSE_TIMEOUT,
+    DEFAULT_CLIENT_MESSAGE_RECEIVE_TIMEOUT, DEFAULT_CLIENT_HANDSHAKE_TIMEOUT,
+    DEFAULT_HOST_UDP_OPERATION_TIMEOUT, DEFAULT_HOST_CLIENT_DATA_RECEIVE_TIMEOUT
+)
 from src.gui.dialogs import PasswordInputDialog, Ed25519ChannelSelectionDialog
 import threading
 from cryptography.hazmat.primitives.asymmetric import ed25519
@@ -38,6 +44,15 @@ class MainWindow(QMainWindow):
             channel: {"private": None, "public": None, "path_private": "", "path_public": ""}
             for channel in ED25519_CHANNELS
         }
+        
+        self.timeout_settings = {
+            "client_rsa_timeout": DEFAULT_CLIENT_RSA_TIMEOUT,
+            "client_password_response_timeout": DEFAULT_CLIENT_PASSWORD_RESPONSE_TIMEOUT,
+            "client_message_receive_timeout": DEFAULT_CLIENT_MESSAGE_RECEIVE_TIMEOUT,
+            "client_handshake_timeout": DEFAULT_CLIENT_HANDSHAKE_TIMEOUT,
+            "host_udp_operation_timeout": DEFAULT_HOST_UDP_OPERATION_TIMEOUT,
+            "host_client_data_receive_timeout": DEFAULT_HOST_CLIENT_DATA_RECEIVE_TIMEOUT
+        }        
 
         for channel_name in ED25519_CHANNELS:
             widgets = self.ed25519_channel_widgets[channel_name]
@@ -51,6 +66,7 @@ class MainWindow(QMainWindow):
 
         self.btn_host.clicked.connect(self.on_host_clicked)
         self.btn_join.clicked.connect(self.on_join_clicked)
+        self.btn_advanced_timeout_options.clicked.connect(self.show_advanced_timeout_dialog)
 
         self.username_entry.textChanged.connect(self.update_username)
         self.btn_save_settings.clicked.connect(self.save_settings)
@@ -73,7 +89,7 @@ class MainWindow(QMainWindow):
     def set_original_streams(self, stdout, stderr):
         self.original_stdout = stdout
         self.original_stderr = stderr
-        self.app_service = AppService(self, self.original_stdout, self.original_stderr, self.ecc_manager)
+        self.app_service = AppService(self, self.original_stdout, self.original_stderr, self.ecc_manager, self.timeout_settings)
         print("[INFO] [MainWindow] AppService inicializado.")
 
     @Slot(str)
@@ -134,7 +150,8 @@ class MainWindow(QMainWindow):
 
             self.auth_port = auth_port
             self.comm_port = comm_port
-            self.app_service.auth_service.auth_port = auth_port 
+            self.app_service.auth_service.auth_port = auth_port
+            self.app_service.comm_port = comm_port
             self.show_dialog("Sucesso", "Configurações de portas salvas com sucesso!")
             print(f"[SUCCESS] [MainWindow] Configurações de portas salvas: Auth={self.auth_port}, Comm={self.comm_port}.")
 
@@ -144,6 +161,17 @@ class MainWindow(QMainWindow):
         except Exception as e:
             self.show_dialog("Erro", f"Ocorreu um erro inesperado ao salvar configurações: {str(e)}")
             print(f"[CRITICAL] [MainWindow] Erro inesperado ao salvar configurações: {e}")
+
+
+    @Slot()
+    def show_advanced_timeout_dialog(self):
+        timeout_dialog = AdvancedTimeoutDialog(self, self.timeout_settings)
+        if timeout_dialog.exec() == QDialog.Accepted:
+            self.timeout_settings = timeout_dialog.get_timeouts()
+            self.app_service.update_timeout_settings(self.timeout_settings)
+            self.show_dialog("Sucesso", "Configurações de timeout salvas com sucesso!")
+        else:
+            self.show_dialog("Aviso", "Configurações de timeout não foram salvas.")
 
     @Slot()
     def on_host_clicked(self):

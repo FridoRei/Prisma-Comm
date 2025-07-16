@@ -31,7 +31,7 @@ def broadcast_from_host(message: str, chat_widget_instance):
         except Exception as e:
             print(f"[ERROR] [ChatServer] Erro ao tentar broadcast para {handler.username} ({handler.addr}): {e}")
 
-def start_server(chat_widget_instance, port, host_ed25519_private_key: ed25519.Ed25519PrivateKey, dos_detector: DoSDetector):
+def start_server(chat_widget_instance, port, host_ed25519_private_key: ed25519.Ed25519PrivateKey, dos_detector: DoSDetector, host_client_data_receive_timeout: int = 5):
     print("[INFO] [ChatServer] Iniciando servidor de chat...")
 
     with clientes_lock:
@@ -45,7 +45,7 @@ def start_server(chat_widget_instance, port, host_ed25519_private_key: ed25519.E
     try:
         server_socket.bind((host, port))
         server_socket.listen(5)
-        server_socket.settimeout(7.0)
+        server_socket.settimeout(3.0)
 
         if chat_widget_instance:
             chat_widget_instance.add_message_to_chat(f"[INFO] Servidor de chat iniciado em {host}:{port}")
@@ -106,7 +106,7 @@ def start_server(chat_widget_instance, port, host_ed25519_private_key: ed25519.E
                     conn.sendall(b"TOKEN_ACCEPTED\n")
                     print(f"[INFO] [ChatServer] Conexão ao chat de {client_ip} aceita (token válido).")
 
-                    handler = ClientHandler(conn, addr, host_ed25519_private_key, dos_detector)
+                    handler = ClientHandler(conn, addr, host_ed25519_private_key, dos_detector, host_client_data_receive_timeout)
 
                     thread = threading.Thread(target=handler.run, daemon=True)
 

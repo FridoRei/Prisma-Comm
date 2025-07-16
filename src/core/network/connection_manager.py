@@ -3,8 +3,6 @@ import socket
 from src.core.auth.token_manager import gerar_hash_senha
 from src.core.auth.rsa_manager import RSAManager
 
-client_session_token = None
-
 def is_utf8_valid(data: bytes) -> bool:
     try:
         data.decode('utf-8')
@@ -28,9 +26,9 @@ def obter_gateway():
         print(f"[ERROR] [ConnectionManager] Erro inesperado ao obter gateway: {e}")
     return None
 
-def get_server_public_key(server_ip, auth_port):
+def get_server_public_key(server_ip, auth_port, timeout_rsa):
     try:
-        with socket.create_connection((server_ip, auth_port), timeout=10) as sock:
+        with socket.create_connection((server_ip, auth_port), timeout=timeout_rsa) as sock:
             print(f"[INFO] [ConnectionManager] Tentando obter chave pública do servidor {server_ip}:{auth_port}...")
             public_key_bytes = sock.recv(2048)
             if not public_key_bytes:
@@ -60,7 +58,7 @@ def get_server_public_key(server_ip, auth_port):
         print(f"[CRITICAL] [ConnectionManager] Erro inesperado ao obter chave pública do servidor {server_ip}:{auth_port}: {e}")
     return None
 
-def verificar_conexao_com_host(ip, porta, password: str):
+def verificar_conexao_com_host(ip, porta, password: str, timeout_rsa: int, timeout_passowrd_response: int):
     global client_session_token
 
     if not ip:
@@ -68,7 +66,7 @@ def verificar_conexao_com_host(ip, porta, password: str):
         return False
 
     print(f"[INFO] [ConnectionManager] Verificando conexão com o host de autenticação {ip}:{porta}...")
-    server_public_key_or_status = get_server_public_key(ip, porta)
+    server_public_key_or_status = get_server_public_key(ip, porta, timeout_rsa)
 
     if isinstance(server_public_key_or_status, str): 
         if server_public_key_or_status == "ALREADY_AUTHENTICATED":
@@ -85,7 +83,7 @@ def verificar_conexao_com_host(ip, porta, password: str):
 
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-            sock.settimeout(5)
+            sock.settimeout(timeout_passowrd_response)
             try:
                 password_hash_para_envio = gerar_hash_senha(password)
             except ValueError as ve:
@@ -122,8 +120,8 @@ def verificar_conexao_com_host(ip, porta, password: str):
                 parts = resposta_servidor.split(":", 1)
                 if len(parts) == 2:
                     client_session_token = parts[1] 
-                    print(f"[SUCCESS] [ConnectionManager] Autenticação bem-sucedida! Token recebido: {client_session_token[:8]}...")
-                    return True
+                    print(f"[SUCCESS] [ConnectionManager] Autenticação bem-sucedida!")
+                    return client_session_token
                 else:
                     print(f"[WARNING] [ConnectionManager] Formato de resposta AUTH_SUCCESS inválido: '{resposta_servidor}'")
                     return False

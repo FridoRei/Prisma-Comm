@@ -23,13 +23,13 @@ class ClientHandler(QObject):
     client_status_for_host = Signal(str)
     user_list_updated = Signal()
 
-    def __init__(self, client_socket, addr, host_ed25519_private_key: ed25519.Ed25519PrivateKey, dos_detector: DoSDetector):
+    def __init__(self, client_socket, addr, host_ed25519_private_key: ed25519.Ed25519PrivateKey, dos_detector: DoSDetector, host_client_data_receive_timeout: int):
         super().__init__()
         self.client_socket = client_socket
         self.addr = addr
         self.username = f"[{addr[0]}]"
         self._running = True
-        self.client_socket.settimeout(5.0)
+        self.client_socket.settimeout(host_client_data_receive_timeout)
         self.aes_manager = None
         self.ecc_manager = ECCManager()
         self.dos_detector = dos_detector
@@ -246,7 +246,6 @@ class ClientHandler(QObject):
                 if self in handlers:
                     handlers.remove(self)
 
-           
             with ip_to_token_map_lock:
                 if client_ip in ip_to_token_map:
                     token_to_remove = ip_to_token_map[client_ip]
@@ -255,7 +254,6 @@ class ClientHandler(QObject):
                         if token_to_remove in authenticated_sessions:
                             del authenticated_sessions[token_to_remove]
                             print(f"[INFO] [ClientHandler] Token de sessão {token_to_remove[:8]}... removido ao desconectar cliente {client_ip}.")
-
 
             with client_aes_keys_lock:
                 if client_ip in client_aes_keys:

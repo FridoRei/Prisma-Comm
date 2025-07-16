@@ -82,7 +82,7 @@ def handle_public_key_request(conn: socket.socket, addr: tuple, dos_detector: Do
         except Exception as e:
             print(f"[ERROR] [AuthServer] Erro ao fechar conexão TCP com {addr}: {e}")
 
-def run_auth_server(auth_port: int, stop_event: threading.Event, host_password: str, dos_detector: DoSDetector):
+def run_auth_server(auth_port: int, stop_event: threading.Event, host_password: str, dos_detector: DoSDetector, host_udp_operation_timeout: int):
     udp_server_socket = None
     tcp_server_socket = None
     request_limiter = RequestLimiter(max_length=REQUEST_MAX_LENGTH)
@@ -90,7 +90,7 @@ def run_auth_server(auth_port: int, stop_event: threading.Event, host_password: 
     try:
         udp_server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         udp_server_socket.bind(('0.0.0.0', auth_port))
-        udp_server_socket.settimeout(5.0)
+        udp_server_socket.settimeout(host_udp_operation_timeout)
         tcp_server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         tcp_server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         tcp_server_socket.bind(('0.0.0.0', auth_port))
@@ -182,7 +182,7 @@ def run_auth_server(auth_port: int, stop_event: threading.Event, host_password: 
                             ip_to_token_map[client_ip] = session_token
 
                         udp_server_socket.sendto(f"AUTH_SUCCESS:{session_token}".encode('utf-8'), addr) 
-                        print(f"[SUCCESS] [AuthServer] Autenticação BEM-SUCEDIDA para {client_ip}. Token gerado: {session_token[:8]}...")
+                        print(f"[SUCCESS] [AuthServer] Autenticação BEM-SUCEDIDA para {client_ip}.")
                     else:
                         udp_server_socket.sendto(b"AUTH_FAILURE", addr)
                         print(f"[WARNING] [AuthServer] Autenticação FALHOU para {client_ip} (senha incorreta).")
