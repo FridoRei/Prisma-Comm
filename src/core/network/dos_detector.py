@@ -9,6 +9,9 @@ class DoSDetector:
         self.time_window = time_window
         self.block_duration = block_duration
 
+        self.ip_message_timestamps = defaultdict(list) 
+        self.silenced_ips = {} 
+
         self.ip_requests = defaultdict(list)
         self.blocked_ips = {}
 
@@ -67,32 +70,32 @@ class DoSDetector:
         Retorna False se a mensagem deve ser descartada (IP silenciado temporariamente).
         """
         current_time = time.time()
+        message_time_window = 5 
+        message_rate_limit = 10
+        message_silence_duration = 20
         with self.lock:
-            # Primeiro, verifica se o IP está bloqueado globalmente (prioridade máxima)
             if ip_address in self.blocked_ips:
                 print(f"[DEBUG] IP {ip_address} está bloqueado globalmente, mensagem descartada.")
-                return False # Mensagem descartada se o IP estiver bloqueado globalmente
+                return False 
 
-            # NOVO: Verifica se o IP está silenciado para mensagens
             if ip_address in self.silenced_ips:
                 if current_time < self.silenced_ips[ip_address]:
                     print(f"[DEBUG] IP {ip_address} está silenciado para mensagens por {round(self.silenced_ips[ip_address] - current_time)}s, mensagem descartada.")
-                    return False # Mensagem descartada se o IP estiver silenciado
+                    return False ilenciado
                 else:
                     print(f"[DEBUG] IP {ip_address} dessilenciado para mensagens.")
                     del self.silenced_ips[ip_address]
 
-            # Processa a requisição de mensagem de chat
-            self.ip_message_timestamps[ip_address] = [ts for ts in self.ip_message_timestamps[ip_address] if ts > current_time - self.message_time_window]
+            self.ip_message_timestamps[ip_address] = [ts for ts in self.ip_message_timestamps[ip_address] if ts > current_time - message_time_window]
             self.ip_message_timestamps[ip_address].append(current_time)
 
-            if len(self.ip_message_timestamps[ip_address]) > self.message_rate_limit:
-                self.silenced_ips[ip_address] = current_time + self.message_silence_duration
+            if len(self.ip_message_timestamps[ip_address]) > message_rate_limit:
+                self.silenced_ips[ip_address] = current_time + message_silence_duration
                 print(f"[INFO] IP {ip_address} mandou muitas mensagens em pouco tempo, silenciando para mensagens por {self.message_silence_duration}s.")
-                self.ip_message_timestamps[ip_address].clear() # Limpa os timestamps para reiniciar a contagem após o silenciamento
-                return False # Mensagem descartada
+                self.ip_message_timestamps[ip_address].clear() 
+                return False 
             
-            return True # Mensagem permitida          
+            return True         
             
     def stop(self):
         """
