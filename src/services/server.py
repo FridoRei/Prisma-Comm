@@ -90,7 +90,7 @@ def run_auth_server(auth_port: int, stop_event: threading.Event, host_password: 
     try:
         udp_server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         udp_server_socket.bind(('0.0.0.0', auth_port))
-        udp_server_socket.settimeout(1.0)
+        udp_server_socket.settimeout(5.0)
         tcp_server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         tcp_server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         tcp_server_socket.bind(('0.0.0.0', auth_port))

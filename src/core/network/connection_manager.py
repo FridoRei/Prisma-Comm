@@ -30,7 +30,7 @@ def obter_gateway():
 
 def get_server_public_key(server_ip, auth_port):
     try:
-        with socket.create_connection((server_ip, auth_port), timeout=5) as sock:
+        with socket.create_connection((server_ip, auth_port), timeout=10) as sock:
             print(f"[INFO] [ConnectionManager] Tentando obter chave pública do servidor {server_ip}:{auth_port}...")
             public_key_bytes = sock.recv(2048)
             if not public_key_bytes:
@@ -61,7 +61,7 @@ def get_server_public_key(server_ip, auth_port):
     return None
 
 def verificar_conexao_com_host(ip, porta, password: str):
-    global client_session_token 
+    global client_session_token
 
     if not ip:
         print("[ERROR] [ConnectionManager] Endereço IP do host não fornecido.")
@@ -69,14 +69,19 @@ def verificar_conexao_com_host(ip, porta, password: str):
 
     print(f"[INFO] [ConnectionManager] Verificando conexão com o host de autenticação {ip}:{porta}...")
     server_public_key_or_status = get_server_public_key(ip, porta)
-    if server_public_key_or_status == "ALREADY_AUTHENTICATED": 
-        print("[INFO] [ConnectionManager] Cliente já autenticado no servidor de autenticação.")
-        return True
-    elif not server_public_key_or_status:
+
+    if isinstance(server_public_key_or_status, str): 
+        if server_public_key_or_status == "ALREADY_AUTHENTICATED":
+            print("[INFO] [ConnectionManager] Cliente já autenticado no servidor de autenticação.")
+            return True
+        else:
+            print(f"[ERROR] [ConnectionManager] Servidor reportou um erro: {server_public_key_or_status}. Autenticação abortada.")
+            return False
+    elif not server_public_key_or_status: 
         print("[ERROR] [ConnectionManager] Não foi possível obter a chave pública do servidor. Autenticação abortada.")
         return False
-    server_public_key = server_public_key_or_status
 
+    server_public_key = server_public_key_or_status
 
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
