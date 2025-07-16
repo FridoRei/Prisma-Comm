@@ -3,6 +3,15 @@ import socket
 from src.core.auth.token_manager import gerar_hash_senha
 from src.core.auth.rsa_manager import RSAManager
 
+client_session_token = None
+
+def is_utf8_valid(data: bytes) -> bool:
+    try:
+        data.decode('utf-8')
+        return True
+    except UnicodeDecodeError:
+        return False
+
 def obter_gateway():
     try:
         result = subprocess.run(["ip", "route"], capture_output=True, text=True, check=True)
@@ -27,11 +36,17 @@ def get_server_public_key(server_ip, auth_port):
             if not public_key_bytes:
                 print(f"[ERROR] [ConnectionManager] Servidor {server_ip}:{auth_port} fechou a conexão ou enviou dados vazios.")
                 return None
-            
+
             if public_key_bytes.startswith(b"ERROR:"):
-                print(f"[ERROR] [ConnectionManager] Erro reportado pelo servidor ao obter chave pública: {public_key_bytes.decode(errors='ignore')}")
+                if is_utf8_valid(public_key_bytes):
+                    print(f"[ERROR] [ConnectionManager] Erro reportado pelo servidor ao obter chave pública: {public_key_bytes.decode('utf-8')}")
+                else:
+                    print(f"[ERROR] [ConnectionManager] Erro reportado pelo servidor ao obter chave pública (dados não UTF-8): {public_key_bytes.hex()}")
                 return None
-            
+            elif public_key_bytes.startswith(b"ALREADY_AUTHENTICATED"):
+                print(f"[WARNING] [ConnectionManager] Servidor {server_ip}:{auth_port} recusou requisição: já autenticado.")
+                return "ALREADY_AUTHENTICATED" 
+
             public_key = RSAManager()._load_key_file(public_key_bytes)
             print(f"[INFO] [ConnectionManager] Chave pública do servidor obtida com sucesso de {server_ip}:{auth_port}.")
             return public_key
@@ -46,15 +61,22 @@ def get_server_public_key(server_ip, auth_port):
     return None
 
 def verificar_conexao_com_host(ip, porta, password: str):
+    global client_session_token 
+
     if not ip:
         print("[ERROR] [ConnectionManager] Endereço IP do host não fornecido.")
         return False
 
     print(f"[INFO] [ConnectionManager] Verificando conexão com o host de autenticação {ip}:{porta}...")
-    server_public_key = get_server_public_key(ip, porta)
-    if not server_public_key:
+    server_public_key_or_status = get_server_public_key(ip, porta)
+    if server_public_key_or_status == "ALREADY_AUTHENTICATED": 
+        print("[INFO] [ConnectionManager] Cliente já autenticado no servidor de autenticação.")
+        return True
+    elif not server_public_key_or_status:
         print("[ERROR] [ConnectionManager] Não foi possível obter a chave pública do servidor. Autenticação abortada.")
         return False
+    server_public_key = server_public_key_or_status
+
 
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
@@ -84,16 +106,28 @@ def verificar_conexao_com_host(ip, porta, password: str):
             sock.sendto(encrypted_password_hash, (ip, porta))
 
             resposta_servidor_bytes, _ = sock.recvfrom(1024)
-            
-            try:
+
+            if is_utf8_valid(resposta_servidor_bytes):
                 resposta_servidor = resposta_servidor_bytes.decode('utf-8').strip()
-            except UnicodeDecodeError:
+            else:
                 print(f"[ERROR] [ConnectionManager] Resposta do servidor de {ip}:{porta} não é uma string UTF-8 válida. Conteúdo: {resposta_servidor_bytes.hex()}")
                 resposta_servidor = "INVALID_RESPONSE_ENCODING"
 
-            if resposta_servidor == "AUTH_SUCCESS":
-                print("[SUCCESS] [ConnectionManager] Autenticação bem-sucedida!")
-                return True
+            if resposta_servidor.startswith("AUTH_SUCCESS:"):
+                parts = resposta_servidor.split(":", 1)
+                if len(parts) == 2:
+                    client_session_token = parts[1] 
+                    print(f"[SUCCESS] [ConnectionManager] Autenticação bem-sucedida! Token recebido: {client_session_token[:8]}...")
+                    return True
+                else:
+                    print(f"[WARNING] [ConnectionManager] Formato de resposta AUTH_SUCCESS inválido: '{resposta_servidor}'")
+                    return False
+            elif resposta_servidor == "REQUEST_TOO_LARGE":
+                print(f"[WARNING] [ConnectionManager] Autenticação falhou. Requisição muito grande para o servidor.")
+                return False
+            elif resposta_servidor == "ALREADY_AUTHENTICATED": 
+                print(f"[INFO] [ConnectionManager] Cliente já autenticado no servidor de autenticação (resposta UDP).")
+                return True 
             else:
                 print(f"[WARNING] [ConnectionManager] Autenticação falhou. Resposta do servidor: '{resposta_servidor}'")
                 return False

@@ -2,21 +2,21 @@ import threading
 from PySide6.QtWidgets import QMessageBox, QDialog
 from src.core.network.connection_manager import verificar_conexao_com_host, obter_gateway, obter_gateway_generico
 from src.core.chat.chat_client import ChatClient
-from src.core.chat.chat_server import start_server, stop_chat_server 
+from src.core.chat.chat_server import start_server, stop_chat_server
 from src.services.auth_service import AuthService
 from src.config.settings import DEFAULT_USERNAME, DEFAULT_AUTH_PORT, DEFAULT_COMM_PORT
-from src.core.chat.globals import authenticated_ips, authenticated_ips_lock, temp_rsa_managers, temp_rsa_managers_lock, connected_users, connected_users_lock
+from src.core.chat.globals import temp_rsa_managers, temp_rsa_managers_lock, connected_users, connected_users_lock
 import socket
 from src.core.crypto.ecc_manager import ECCManager
 from src.gui.dialogs import JoinOptionDialog
-from cryptography.hazmat.primitives.asymmetric import ed25519 
+from cryptography.hazmat.primitives.asymmetric import ed25519
 from src.core.network.dos_detector import DoSDetector
 
 class AppService:
     def __init__(self, main_window_instance, original_stdout, original_stderr, ecc_manager):
         self.main_window = main_window_instance
         self.dos_detector = DoSDetector()
-        self.auth_service = AuthService(auth_port=self.main_window.auth_port, dos_detector=self.dos_detector) 
+        self.auth_service = AuthService(auth_port=self.main_window.auth_port, dos_detector=self.dos_detector)
         self.chat_client_instance = None
         self.chat_server_thread = None
         self.is_connected_to_chat = False
@@ -60,11 +60,7 @@ class AppService:
         else:
             self.show_error("Erro", "Não foi possível obter o IP local. Verifique sua conexão de rede.")
             print("[ERROR] [AppService] Não foi possível obter o IP local.")
-            ips_locais = ['127.0.0.1'] 
-
-        with authenticated_ips_lock:
-            for ip in ips_locais:
-                authenticated_ips.add(ip)
+            ips_locais = ['127.0.0.1']
 
         self.chat_server_thread = threading.Thread(
             target=start_server,
@@ -93,7 +89,7 @@ class AppService:
                 print(f"[ERROR] [AppService] Endereço IP inválido ou não encontrado: {server_ip_to_use}")
                 return
 
-            if verificar_conexao_com_host(server_ip_to_use, self.main_window.auth_port, client_password):                
+            if verificar_conexao_com_host(server_ip_to_use, self.main_window.auth_port, client_password):
                 self.join_hotspot_chat(server_ip_to_use, username, client_ed25519_public_key_bytes)
             else:
                 self.show_error("Falha na Autenticação", f"Não foi possível autenticar com {server_ip_to_use}. Verifique a senha e o IP.")
@@ -111,7 +107,7 @@ class AppService:
             return False
 
     def join_hotspot_chat(self, server_ip: str, username: str, client_ed25519_public_key_bytes: bytes):
-        self.disconnect_chat_client() 
+        self.disconnect_chat_client()
 
         self.main_window.setup_chat_widget(is_host=False)
 
@@ -120,18 +116,19 @@ class AppService:
             self.main_window.comm_port,
             self.main_window.chat_widget_instance,
             username,
-            self.ecc_manager, 
-            client_ed25519_public_key_bytes 
+            self.ecc_manager,
+            client_ed25519_public_key_bytes
         )
         self.main_window.chat_widget_instance.client = self.chat_client_instance
 
-        connection_successful = self.chat_client_instance.connect() 
+        connection_successful = self.chat_client_instance.connect()
 
         if connection_successful:
             if self.chat_client_instance.worker:
-                self.chat_client_instance.worker.disconnected.connect(self.main_window.on_chat_disconnected)
-                self.chat_client_instance.worker.specific_error.connect(self.main_window.handle_specific_chat_error)
-            
+                if self.main_window.chat_widget_instance:
+                    self.chat_client_instance.worker.disconnected.connect(self.main_window.on_chat_disconnected)
+                    self.chat_client_instance.worker.specific_error.connect(self.main_window.handle_specific_chat_error)
+
             self.is_connected_to_chat = True
             self.main_window.show_chat_page()
         else:
@@ -144,19 +141,26 @@ class AppService:
     def disconnect_chat_client(self):
         if self.chat_client_instance:
             if self.chat_client_instance.worker:
-                try:
-                    self.chat_client_instance.worker.message_received.disconnect(self.main_window.chat_widget_instance.add_message_to_chat)
-                except TypeError: pass 
-                try:
-                    self.chat_client_instance.worker.connection_error.disconnect(self.main_window.chat_widget_instance.add_message_to_chat)
-                except TypeError: pass
-                try:
-                    self.chat_client_instance.worker.disconnected.disconnect(self.main_window.on_chat_disconnected)
-                except TypeError: pass
-                try:
-                    self.chat_client_instance.worker.specific_error.disconnect(self.main_window.handle_specific_chat_error)
-                except TypeError: pass
-                
+                if self.main_window.chat_widget_instance:
+                    try:
+                        self.chat_client_instance.worker.message_received.disconnect(self.main_window.chat_widget_instance.add_message_to_chat)
+                    except (TypeError, RuntimeError) as e: 
+                        print(f"[DEBUG] [AppService] Erro ao desconectar message_received (pode ser normal): {e}")
+                    try:
+                        self.chat_client_instance.worker.connection_error.disconnect(self.main_window.chat_widget_instance.add_message_to_chat)
+                    except (TypeError, RuntimeError) as e:
+                        print(f"[DEBUG] [AppService] Erro ao desconectar connection_error (pode ser normal): {e}")
+                    try:
+                        self.chat_client_instance.worker.disconnected.disconnect(self.main_window.on_chat_disconnected)
+                    except (TypeError, RuntimeError) as e:
+                        print(f"[DEBUG] [AppService] Erro ao desconectar disconnected (pode ser normal): {e}")
+                    try:
+                        self.chat_client_instance.worker.specific_error.disconnect(self.main_window.handle_specific_chat_error)
+                    except (TypeError, RuntimeError) as e:
+                        print(f"[DEBUG] [AppService] Erro ao desconectar specific_error (pode ser normal): {e}")
+                else:
+                    print("[INFO] [AppService] chat_widget_instance já é None, pulando desconexão de sinais específicos do worker.")
+
                 self.chat_client_instance.worker.stop()
                 self.chat_client_instance.worker = None
             self.chat_client_instance.disconnect()
@@ -164,17 +168,15 @@ class AppService:
 
     def shutdown(self):
         self.auth_service.stop_server()
-        stop_chat_server() 
+        stop_chat_server()
         if self.chat_server_thread and self.chat_server_thread.is_alive():
-            self.chat_server_thread.join(timeout=2) 
+            self.chat_server_thread.join(timeout=2)
             if self.chat_server_thread.is_alive():
                 print("[WARNING] [AppService] Thread do servidor de chat não encerrou em tempo.")
-        
+
         self.disconnect_chat_client()
         self.dos_detector.stop()
 
-        with authenticated_ips_lock:
-            authenticated_ips.clear()
         with temp_rsa_managers_lock:
             for ip in list(temp_rsa_managers.keys()):
                 if ip in temp_rsa_managers:
