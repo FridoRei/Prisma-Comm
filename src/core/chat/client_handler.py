@@ -160,13 +160,19 @@ class ClientHandler(QObject):
             while self._running: 
                 try:
                     encrypted_message_b64 = self.client_socket.recv(2048).decode('utf-8') 
+                    
+                    if not self.is_authenticated():
+                        if self.dos_detector and not self.dos_detector.check_and_record(self.addr[0]):
+                            print(f"[DoS] Bloqueio global para {self.addr[0]}")
+                            break
+                                            
                     if not encrypted_message_b64: 
                         print(f"[INFO] [ClientHandler] Cliente {self.username} ({self.addr[0]}) desconectou (recebeu dados vazios).")
                         break
-
-                    if not self.dos_detector.check_and_record(client_ip):
-                        print(f"[WARNING] [ClientHandler] Mensagem de {self.username} ({self.addr[0]}) bloqueada por DoSDetector.")
-                        continue 
+                    
+                    if self.dos_detector and not self.dos_detector.anti_spam_message(self.addr[0]):
+                        print(f"[SPAM] Mensagem descartada de {self.addr[0]}")
+                        continue                      
 
                     parts = encrypted_message_b64.split('|')
                     if len(parts) == 3:
@@ -177,7 +183,6 @@ class ClientHandler(QObject):
                         try:
                             mensagem_descriptografada = self.aes_manager.decrypt(nonce, ciphertext, tag)
                             self.new_message_for_host.emit(f"{self.username}: {mensagem_descriptografada}")
-                            print(f"[DEBUG] [ClientHandler] Mensagem de {self.username} recebida e descriptografada: {mensagem_descriptografada[:50]}...")
                             self.broadcast_message(f"{self.username}: {mensagem_descriptografada}", self.client_socket)
                         except Exception as e:
                             self.new_message_for_host.emit(f"[ERROR] Erro ao descriptografar mensagem de {self.username} ({self.addr[0]}).")
