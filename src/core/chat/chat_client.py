@@ -126,18 +126,16 @@ class ChatClient:
             print("[INFO] [ChatClient] Iniciando handshake ECC...")
             server_handshake_data_b64 = self.client_socket.recv(4096).decode('utf-8')
             parts = server_handshake_data_b64.split('|')
-            if len(parts) != 3:
+            if len(parts) != 2:
                 raise ValueError(f"Formato de handshake do servidor inválido. Partes esperadas: 3, recebidas: {len(parts)}. Dados: {server_handshake_data_b64[:100]}...")
 
             server_x25519_public_b64 = parts[0]
             server_signature_b64 = parts[1]
-            host_ed25519_public_b64 = parts[2]
 
             server_x25519_public_bytes = ECCManager.base64_to_bytes(server_x25519_public_b64)
-            server_signature_bytes = AESManager.base64_to_bytes(server_signature_b64) 
-            host_ed25519_public_bytes = AESManager.base64_to_bytes(host_ed25519_public_b64) 
+            server_signature_bytes = AESManager.base64_to_bytes(server_signature_b64)  
 
-            print("[INFO] [ChatClient] Chaves X25519 e Ed25519 do servidor recebidas.")
+            print("[INFO] [ChatClient] Chave X25519 e assinatura do servidor recebidas.")
 
             if not self.client_ed25519_public_key_bytes:
                 raise Exception("Nenhuma chave pública Ed25519 do cliente fornecida para verificar a assinatura do servidor. Autenticação do servidor falhou.")

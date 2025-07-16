@@ -4,7 +4,7 @@ from collections import defaultdict
 
 class DoSDetector:
     """ Mecanismo para detectar e mitigar tentativas de ataque DoS baseado em limitação de taxa por endereço IP."""
-    def __init__(self, request_limit: int = 2, time_window: int = 1, block_duration: int = 300):
+    def __init__(self, request_limit: int = 6, time_window: int = 7, block_duration: int = 300):
         print(f"[INFO] DoSDetector initialized with limit: {request_limit}, window: {time_window}, block duration: {block_duration}")
         self.request_limit = request_limit
         self.time_window = time_window

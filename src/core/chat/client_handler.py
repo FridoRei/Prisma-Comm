@@ -70,10 +70,10 @@ class ClientHandler(QObject):
                 signature = self.ecc_manager.sign_data(server_x25519_public_bytes)
                 print(f"[DEBUG] [ClientHandler] Chave X25519 do servidor assinada.")
 
-                handshake_data = f"{ECCManager.bytes_to_base64(server_x25519_public_bytes)}|{AESManager.bytes_to_base64(signature)}|{AESManager.bytes_to_base64(self.host_ed25519_public_key_bytes)}"
+                handshake_data = f"{ECCManager.bytes_to_base64(server_x25519_public_bytes)}|{AESManager.bytes_to_base64(signature)}"
                 self.client_socket.sendall(handshake_data.encode('utf-8'))
-                self.client_status_for_host.emit(f"[INFO] Chaves X25519 e Ed25519 do servidor enviadas para {self.addr[0]}.")
-                print(f"[INFO] [ClientHandler] Chaves X25519 e Ed25519 do servidor enviadas para {self.addr[0]}.")
+                self.client_status_for_host.emit(f"[INFO] Chave X25519 e assinatura do servidor enviadas para {self.addr[0]}.")
+                print(f"[INFO] [ClientHandler] Chave X25519 e assinatura do servidor enviadas para {self.addr[0]}.")
 
                 client_handshake_response_b64 = self.client_socket.recv(2048).decode('utf-8').strip()
                 client_x25519_public_b64 = client_handshake_response_b64

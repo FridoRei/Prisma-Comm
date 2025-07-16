@@ -37,7 +37,7 @@ class AppService:
         msg.setIcon(QMessageBox.Information)
         msg.exec()
 
-    def handle_host_clicked(self, host_password: str, host_ed25519_private_key: ed25519.Ed25519PrivateKey, host_ed25519_public_key_bytes: bytes):
+    def handle_host_clicked(self, host_password: str, host_ed25519_private_key: ed25519.Ed25519PrivateKey):
         try:
             self.auth_service.start_server(host_password)
         except Exception as e:
@@ -69,7 +69,7 @@ class AppService:
         self.chat_server_thread = threading.Thread(
             target=start_server,
             args=(self.main_window.chat_widget_instance, self.main_window.comm_port,
-                  host_ed25519_private_key, host_ed25519_public_key_bytes, self.dos_detector),
+                  host_ed25519_private_key, self.dos_detector),
             daemon=True,
             name="ChatServerThread"
         )

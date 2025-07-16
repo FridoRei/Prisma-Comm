@@ -219,25 +219,9 @@ class MainWindow(QMainWindow):
             self.show_dialog("Erro", "Nenhuma chave privada Ed25519 disponível para iniciar o servidor de chat. A hospedagem foi cancelada.")
             return
 
-        selected_public_key_bytes = None
-        if self.ed25519_keys[selected_private_channel]["public"] is not None:
-            try:
-                selected_public_key_bytes = self.ed25519_keys[selected_private_channel]["public"].public_bytes(
-                    encoding=serialization.Encoding.PEM,
-                    format=serialization.PublicFormat.SubjectPublicKeyInfo
-                )
-            except Exception as e:
-                self.show_dialog("Erro", f"Erro ao serializar a chave pública Ed25519 para o canal '{selected_private_channel.capitalize()}': {e}. A hospedagem foi cancelada.")
-                print(f"[ERROR] [MainWindow] Erro ao serializar chave pública Ed25519: {e}. Hospedagem cancelada.")
-                return
-        else:
-            self.show_dialog("Erro", f"A chave pública para o canal '{selected_private_channel.capitalize()}' não foi carregada. O servidor precisa da sua chave pública para que os clientes a usem. A hospedagem foi cancelada.")
-            return
-
         self.app_service.handle_host_clicked(
             self.host_password,
-            self.ed25519_keys[selected_private_channel]["private"],
-            selected_public_key_bytes
+            self.ed25519_keys[selected_private_channel]["private"]
         )
 
     @Slot()

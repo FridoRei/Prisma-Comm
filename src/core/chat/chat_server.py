@@ -31,7 +31,7 @@ def broadcast_from_host(message: str, chat_widget_instance):
         except Exception as e:
             print(f"[ERROR] [ChatServer] Erro ao tentar broadcast para {handler.username} ({handler.addr}): {e}")
 
-def start_server(chat_widget_instance, port, host_ed25519_private_key: ed25519.Ed25519PrivateKey, host_ed25519_public_key_bytes: bytes, dos_detector: DoSDetector):
+def start_server(chat_widget_instance, port, host_ed25519_private_key: ed25519.Ed25519PrivateKey, dos_detector: DoSDetector):
     print("[INFO] [ChatServer] Iniciando servidor de chat...")
 
     with clientes_lock:
@@ -77,7 +77,7 @@ def start_server(chat_widget_instance, port, host_ed25519_private_key: ed25519.E
                     if client_ip in authenticated_ips:
                         print(f"[INFO] [ChatServer] Conexão ao chat de {client_ip} aceita (IP autenticado).")
 
-                        handler = ClientHandler(conn, addr, host_ed25519_private_key, host_ed25519_public_key_bytes, dos_detector)
+                        handler = ClientHandler(conn, addr, host_ed25519_private_key, dos_detector)
 
                         thread = threading.Thread(target=handler.run, daemon=True)
 
