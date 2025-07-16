@@ -23,4 +23,3 @@ class ConsoleOutputRedirector(QObject):
 
     def flush(self):
         self._original_stdout.flush()
-

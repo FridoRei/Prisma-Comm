@@ -132,7 +132,9 @@ class AppService:
             self.timeout_settings['client_handshake_timeout']
         )
         self.main_window.chat_widget_instance.client = self.chat_client_instance
-
+        
+        self.main_window.chat_widget_instance.request_client_disconnect.connect(self.disconnect_chat_client)
+        
         connection_successful = self.chat_client_instance.connect()
 
         if connection_successful:
@@ -151,12 +153,18 @@ class AppService:
 
 
     def disconnect_chat_client(self):
+        """
+        Desconecta o cliente do chat e limpa os recursos.
+        Este método pode ser chamado tanto internamente (ex: erro de conexão)
+        quanto externamente (ex: botão de desconexão).
+        """
         if self.chat_client_instance:
+            print("[INFO] [AppService] Desconectando cliente de chat...")
             if self.chat_client_instance.worker:
                 if self.main_window.chat_widget_instance:
                     try:
                         self.chat_client_instance.worker.message_received.disconnect(self.main_window.chat_widget_instance.add_message_to_chat)
-                    except (TypeError, RuntimeError) as e: 
+                    except (TypeError, RuntimeError) as e:
                         print(f"[DEBUG] [AppService] Erro ao desconectar message_received (pode ser normal): {e}")
                     try:
                         self.chat_client_instance.worker.connection_error.disconnect(self.main_window.chat_widget_instance.add_message_to_chat)
@@ -170,14 +178,23 @@ class AppService:
                         self.chat_client_instance.worker.specific_error.disconnect(self.main_window.handle_specific_chat_error)
                     except (TypeError, RuntimeError) as e:
                         print(f"[DEBUG] [AppService] Erro ao desconectar specific_error (pode ser normal): {e}")
+                    try:
+                        self.main_window.chat_widget_instance.request_client_disconnect.disconnect(self.disconnect_chat_client)
+                    except (TypeError, RuntimeError) as e:
+                        print(f"[DEBUG] [AppService] Erro ao desconectar request_client_disconnect (pode ser normal): {e}")
+
                 else:
                     print("[INFO] [AppService] chat_widget_instance já é None, pulando desconexão de sinais específicos do worker.")
 
                 self.chat_client_instance.worker.stop()
                 self.chat_client_instance.worker = None
-            self.chat_client_instance.disconnect()
+            self.chat_client_instance.disconnect() 
             self.chat_client_instance = None
-
+            self.is_connected_to_chat = False
+            self.main_window.on_chat_disconnected() 
+        else:
+            print("[INFO] [AppService] Nenhuma instância de ChatClient ativa para desconectar.")
+            
     def shutdown(self):
         self.auth_service.stop_server()
         stop_chat_server()

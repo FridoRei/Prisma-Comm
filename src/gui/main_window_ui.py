@@ -399,12 +399,14 @@ class MainWindowUI:
         parent.logs_text_edit.setReadOnly(True)
         parent.logs_text_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         parent.logs_text_edit.setStyleSheet("""
-            background-color: #1e1e1f; 
-            color: #FFFFFF; 
-            font-family: "Monospace";
-            font-size: 10pt;
-            border: none;
-            padding: 5px;
+            QTextEdit { /* Aplica estilos ao QTextEdit em si */
+                background-color: #1e1e1f;
+                color: #FFFFFF; /* Cor padrão para texto sem classe específica */
+                font-family: "Monospace";
+                font-size: 10pt;
+                border: none;
+                padding: 5px;
+            }
 
             span.DEBUG { color: #A9A9A9; }
             span.INFO { color: #FFFFFF; } 

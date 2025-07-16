@@ -10,6 +10,7 @@ import subprocess
 
 class ChatWidget(QWidget):
     disconnect_client_signal = Signal(str) 
+    request_client_disconnect = Signal()
 
     def __init__(self, client: ChatClient = None, is_host: bool = False, broadcast_func=None):
         super().__init__()
@@ -89,6 +90,25 @@ class ChatWidget(QWidget):
             }
         """)
         input_area_layout.addWidget(send_button)
+        if not self.is_host:
+            self.disconnect_button = QPushButton("Desconectar")
+            self.disconnect_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #d9534f; /* Vermelho */
+                    border: none;
+                    border-radius: 5px;
+                    color: white;
+                    padding: 5px 10px;
+                }
+                QPushButton:hover {
+                    background-color: #c9302c;
+                }
+                QPushButton:pressed {
+                    background-color: #444;
+                }
+            """)
+            self.disconnect_button.clicked.connect(self.request_client_disconnect.emit)
+            input_area_layout.addWidget(self.disconnect_button)        
         chat_area_layout.addWidget(input_area_container)
         
         main_layout.addWidget(chat_area_container)

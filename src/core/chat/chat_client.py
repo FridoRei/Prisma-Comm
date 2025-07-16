@@ -256,4 +256,17 @@ class ChatClient:
         except Exception as e:
             print(f"[ERROR] [ChatClient] Erro ao fechar socket do cliente principal: {e}")
         print("[INFO] [ChatClient] Cliente desconectado.")
+        
+    def disconnect_from_server(self):
+        """
+        Método público para iniciar a desconexão do cliente.
+        Chama o método interno 'disconnect' e emite o sinal de desconexão.
+        """
+        print("[INFO] [ChatClient] Solicitando desconexão do servidor...")
+        self.disconnect()
+        if self.chat_widget:
+            if self.worker:
+                self.worker.disconnected.emit()
+            else:
+                pass        
 
