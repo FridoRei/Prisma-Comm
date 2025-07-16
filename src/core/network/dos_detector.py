@@ -91,7 +91,7 @@ class DoSDetector:
 
             if len(self.ip_message_timestamps[ip_address]) > message_rate_limit:
                 self.silenced_ips[ip_address] = current_time + message_silence_duration
-                print(f"[INFO] IP {ip_address} mandou muitas mensagens em pouco tempo, silenciando para mensagens por {self.message_silence_duration}s.")
+                print(f"[INFO] IP {ip_address} mandou muitas mensagens em pouco tempo, silenciando para mensagens por {message_silence_duration}s.")
                 self.ip_message_timestamps[ip_address].clear() 
                 return False 
             
