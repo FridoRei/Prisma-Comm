@@ -80,7 +80,7 @@ def run_auth_server(auth_port: int, stop_event: threading.Event, host_password: 
 
             try:
                 tcp_conn, tcp_addr = tcp_server_socket.accept()
-                threading.Thread(target=handle_public_key_request, args=(tcp_conn, tcp_addr, dos_detector, request_limiter), daemon=True).start()
+                threading.Thread(target=handle_public_key_request, args=(tcp_conn, tcp_addr, dos_detector), daemon=True).start()
             except socket.timeout:
                 pass 
             except OSError as e:
