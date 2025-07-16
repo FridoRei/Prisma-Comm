@@ -33,6 +33,11 @@ class ClientHandler(QObject):
 
         self.host_ed25519_private_key = host_ed25519_private_key
 
+    def is_authenticated(self):
+        """Verifica se o IP está na lista de autenticados"""
+        with authenticated_ips_lock:
+            return self.addr[0] in authenticated_ips
+
     def stop(self): 
         self._running = False
         try:
