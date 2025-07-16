@@ -81,7 +81,7 @@ class DoSDetector:
             if ip_address in self.silenced_ips:
                 if current_time < self.silenced_ips[ip_address]:
                     print(f"[DEBUG] IP {ip_address} está silenciado para mensagens por {round(self.silenced_ips[ip_address] - current_time)}s, mensagem descartada.")
-                    return False ilenciado
+                    return False 
                 else:
                     print(f"[DEBUG] IP {ip_address} dessilenciado para mensagens.")
                     del self.silenced_ips[ip_address]
