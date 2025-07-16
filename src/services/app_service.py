@@ -55,6 +55,8 @@ class AppService:
 
         self.main_window.setup_chat_widget(is_host=True)
         self.is_connected_to_chat = True
+        
+        self.main_window.chat_widget_instance.request_host_shutdown.connect(self.shutdown_host)        
 
         ips_locais = obter_gateway_generico()
         if ips_locais:
@@ -194,6 +196,21 @@ class AppService:
             self.main_window.on_chat_disconnected() 
         else:
             print("[INFO] [AppService] Nenhuma instância de ChatClient ativa para desconectar.")
+   
+    def shutdown_host(self):
+        """
+        Encerra os servidores de autenticação e chat quando o host decide parar.
+        Este método é chamado pelo botão "Encerrar Host".
+        """
+        print("[INFO] [AppService] Solicitando encerramento do host...")
+        if self.main_window.chat_widget_instance:
+            try:
+                self.main_window.chat_widget_instance.request_host_shutdown.disconnect(self.shutdown_host)
+            except (TypeError, RuntimeError) as e:
+                print(f"[DEBUG] [AppService] Erro ao desconectar request_host_shutdown (pode ser normal): {e}")
+        self.shutdown() 
+        self.main_window.on_chat_disconnected()
+        self.show_dialog("Host Encerrado", "O servidor foi encerrado. Todos os clientes serão desconectados.")   
             
     def shutdown(self):
         self.auth_service.stop_server()

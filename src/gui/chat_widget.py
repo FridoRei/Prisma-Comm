@@ -11,6 +11,7 @@ import subprocess
 class ChatWidget(QWidget):
     disconnect_client_signal = Signal(str) 
     request_client_disconnect = Signal()
+    request_host_shutdown = Signal()
 
     def __init__(self, client: ChatClient = None, is_host: bool = False, broadcast_func=None):
         super().__init__()
@@ -94,7 +95,7 @@ class ChatWidget(QWidget):
             self.disconnect_button = QPushButton("Desconectar")
             self.disconnect_button.setStyleSheet("""
                 QPushButton {
-                    background-color: #d9534f; /* Vermelho */
+                    background-color: #d9534f; 
                     border: none;
                     border-radius: 5px;
                     color: white;
@@ -108,7 +109,26 @@ class ChatWidget(QWidget):
                 }
             """)
             self.disconnect_button.clicked.connect(self.request_client_disconnect.emit)
-            input_area_layout.addWidget(self.disconnect_button)        
+            input_area_layout.addWidget(self.disconnect_button)   
+        else: 
+            self.shutdown_host_button = QPushButton("Encerrar Host")
+            self.shutdown_host_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #d9534f; 
+                    border: none;
+                    border-radius: 5px;
+                    color: white;
+                    padding: 5px 10px;
+                }
+                QPushButton:hover {
+                    background-color: #c9302c;
+                }
+                QPushButton:pressed {
+                    background-color: #444;
+                }
+            """)
+            self.shutdown_host_button.clicked.connect(self.request_host_shutdown.emit)
+            input_area_layout.addWidget(self.shutdown_host_button)                 
         chat_area_layout.addWidget(input_area_container)
         
         main_layout.addWidget(chat_area_container)
@@ -210,7 +230,7 @@ class ChatWidget(QWidget):
             disconnect_button = QPushButton("Desconectar")
             disconnect_button.setStyleSheet("""
                 QPushButton {
-                    background-color: #d9534f; /* Vermelho */
+                    background-color: #d9534f;
                     border: none;
                     border-radius: 3px;
                     color: white;

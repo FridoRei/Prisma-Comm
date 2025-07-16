@@ -30,9 +30,9 @@ class MainWindowUI:
 
         sidebar_button_style = """
             QPushButton {
-                background-color: #2e2e2f; /* Cor de fundo para os botões */
-                border: 2px solid #555; /* Borda */
-                border-radius: 20px; /* Metade do tamanho fixo (40/2) para ser circular */
+                background-color: #2e2e2f; 
+                border: 2px solid #555;
+                border-radius: 20px;
                 color: white;
             }
             QPushButton:hover {
@@ -108,10 +108,10 @@ class MainWindowUI:
         buttons_container = QWidget()
         buttons_container_layout = QHBoxLayout(buttons_container)
         buttons_container.setStyleSheet("""
-            background-color: #3e3e3f; /* Cor de fundo do retângulo */
-            border: 1px solid #555; /* Borda */
-            border-radius: 10px; /* Bordas arredondadas */
-            padding: 20px; /* Espaçamento interno */
+            background-color: #3e3e3f; 
+            border: 1px solid #555; 
+            border-radius: 10px;
+            padding: 20px; 
         """)
 
         host_join_button_style = """
@@ -120,7 +120,7 @@ class MainWindowUI:
                 border: none;
                 border-radius: 8px;
                 color: white;
-                font-size: 16px; /* Esta fonte pode ser grande demais para botões pequenos */
+                font-size: 16px; 
                 padding: 10px;
             }
             QPushButton:hover {
@@ -134,12 +134,12 @@ class MainWindowUI:
             QPushButton {
                 background-color: #555;
                 border: none;
-                border-radius: 5px; /* Um pouco menos arredondado */
+                border-radius: 5px;
                 color: white;
-                font-size: 10px; /* Fonte menor */
-                padding: 3px 8px; /* Padding ajustado */
-                min-width: 60px; /* Largura mínima para o texto "Carregar" */
-                min-height: 20px; /* Altura mínima para o texto */
+                font-size: 10px;
+                padding: 3px 8px;
+                min-width: 60px;
+                min-height: 20px;
             }
             QPushButton:hover {
                 background-color: #666;
@@ -190,10 +190,10 @@ class MainWindowUI:
         parent.top_settings_container = QWidget()
         top_settings_layout = QHBoxLayout(parent.top_settings_container)
         parent.top_settings_container.setStyleSheet("""
-            background-color: #4e4e4f; /* Cor de fundo do retângulo */
-            border: 1px solid #666; /* Borda */
-            border-radius: 8px; /* Bordas arredondadas */
-            padding: 10px; /* Espaçamento interno */
+            background-color: #4e4e4f; 
+            border: 1px solid #666; 
+            border-radius: 8px; 
+            padding: 10px;
         """)
 
         username_group_layout = QVBoxLayout()
@@ -381,7 +381,7 @@ class MainWindowUI:
         parent.chat_layout.addStretch()
 
         parent.chat_page.setStyleSheet("""
-            background-color: #4e4e4f; /* Cor diferente para o chat */
+            background-color: #4e4e4f;
             border-radius: 15px;
             padding: 10px;
         """)
@@ -399,9 +399,9 @@ class MainWindowUI:
         parent.logs_text_edit.setReadOnly(True)
         parent.logs_text_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         parent.logs_text_edit.setStyleSheet("""
-            QTextEdit { /* Aplica estilos ao QTextEdit em si */
+            QTextEdit { 
                 background-color: #1e1e1f;
-                color: #FFFFFF; /* Cor padrão para texto sem classe específica */
+                color: #FFFFFF; 
                 font-family: "Monospace";
                 font-size: 10pt;
                 border: none;
