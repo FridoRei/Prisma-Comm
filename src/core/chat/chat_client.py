@@ -7,8 +7,8 @@ from src.core.crypto.aes_manager import AESManager
 class ChatClientWorker(QObject):
     message_received = Signal(str)
     connection_error = Signal(str)
-    disconnected = Signal()
-    specific_error = Signal(str)
+    disconnected = Signal() # Signal to indicate disconnection
+    specific_error = Signal(str) # Signal for specific error messages (e.g., AUTH_REQUIRED)
 
     def __init__(self, client_socket, aes_manager: AESManager):
         super().__init__()
@@ -20,11 +20,15 @@ class ChatClientWorker(QObject):
         self._running = False
         try:
             if self.client_socket:
+                # Attempt to shutdown gracefully before closing
                 self.client_socket.shutdown(socket.SHUT_RDWR)
                 self.client_socket.close()
                 print("[INFO] [ChatClientWorker] Socket do worker fechado.")
         except OSError as e:
-            if e.errno != 107:
+            # Error 107 is "Transport endpoint is not connected" on Linux,
+            # which can happen if the socket is already closed or not fully connected.
+            # It's often safe to ignore during shutdown.
+            if e.errno != 107: 
                 print(f"[ERROR] [ChatClientWorker] Erro ao fechar socket do worker: {e}")
         except Exception as e:
             print(f"[CRITICAL] [ChatClientWorker] Erro inesperado ao fechar socket do worker: {e}")
@@ -37,10 +41,12 @@ class ChatClientWorker(QObject):
                 if not encrypted_message_b64:
                     self.message_received.emit("[INFO] Conexão perdida com o servidor.")
                     print("[INFO] [ChatClientWorker] Conexão perdida com o servidor (dados vazios recebidos).")
-                    self.disconnected.emit()
+                    self.disconnected.emit() # Emit disconnected signal
                     break
 
-                if not encrypted_message_b64.startswith(f"{ECCManager.bytes_to_base64(b'')}"):
+                # Check if it's a control message (not in the encrypted format)
+                parts = encrypted_message_b64.split('|')
+                if len(parts) != 3: 
                     if encrypted_message_b64 == "AUTH_REQUIRED": 
                         self.specific_error.emit("[ERROR] Conexão recusada: Autenticação necessária. Por favor, autentique-se primeiro.")
                         print("[WARNING] [ChatClientWorker] Servidor exigiu autenticação.")
@@ -52,27 +58,23 @@ class ChatClientWorker(QObject):
                         self.disconnected.emit()
                         break
                     else:
+                        # Generic server info message
                         self.message_received.emit(f"[SERVER INFO] {encrypted_message_b64}")
                         print(f"[INFO] [ChatClientWorker] Mensagem de controle do servidor: {encrypted_message_b64}")
                         continue 
 
-                parts = encrypted_message_b64.split('|')
-                if len(parts) == 3:
-                    try:
-                        nonce = AESManager.base64_to_bytes(parts[0])
-                        ciphertext = AESManager.base64_to_bytes(parts[1])
-                        tag = AESManager.base64_to_bytes(parts[2])
+                # Attempt to decrypt if it's in the expected format
+                try:
+                    nonce = AESManager.base64_to_bytes(parts[0])
+                    ciphertext = AESManager.base64_to_bytes(parts[1])
+                    tag = AESManager.base64_to_bytes(parts[2])
 
-                        message = self.aes_manager.decrypt(nonce, ciphertext, tag)
-                        self.message_received.emit(message)
-                        print(f"[DEBUG] [ChatClientWorker] Mensagem descriptografada e exibida.")
-                    except Exception as e:
-                        self.connection_error.emit(f"[ERROR] ERRO ao descriptografar mensagem. Possível chave incorreta ou mensagem corrompida.")
-                        print(f"[ERROR] [ChatClientWorker] ERRO ao descriptografar mensagem: {e}. Conteúdo: {encrypted_message_b64[:100]}...") 
-                else:
-                    self.connection_error.emit(f"[ERROR] Formato de mensagem inválido recebido do servidor.")
-                    print(f"[ERROR] [ChatClientWorker] Formato de mensagem inválido recebido: {encrypted_message_b64[:100]}...") 
-
+                    message = self.aes_manager.decrypt(nonce, ciphertext, tag)
+                    self.message_received.emit(message)
+                except Exception as e:
+                    self.connection_error.emit(f"[ERROR] ERRO ao descriptografar mensagem. Possível chave incorreta ou mensagem corrompida.")
+                    print(f"[ERROR] [ChatClientWorker] ERRO ao descriptografar mensagem: {e}. Conteúdo: {encrypted_message_b64[:100]}...") 
+                
             except socket.timeout:
                 continue
             except ConnectionResetError:
@@ -86,12 +88,13 @@ class ChatClientWorker(QObject):
                 self.disconnected.emit() 
                 break
             except Exception as e:
-                if self._running:
+                if self._running: # Only log if the worker is still supposed to be running
                     self.connection_error.emit(f"[ERROR] Erro de conexão inesperado. Por favor, reconecte.")
                     print(f"[CRITICAL] [ChatClientWorker] Erro inesperado na thread de escuta: {e}")
-                self.disconnected.emit()
+                self.disconnected.emit() # Always emit disconnected on unexpected errors
                 break
 
+        # Ensure socket is closed when the listening loop ends
         try:
             self.client_socket.close()
         except Exception as e:
@@ -102,11 +105,11 @@ class ChatClient:
     def __init__(self, host_ip, port, chat_widget=None, nome_usuario="Usuário", ecc_manager=None, client_ed25519_public_key_bytes: bytes = None):
         self.host = host_ip
         self.port = port
-        self.chat_widget = chat_widget
+        self.chat_widget = chat_widget 
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.nome_usuario = nome_usuario
         self.worker = None
-        self.thread = None
+        self.thread = None # Initialize thread to None
         self.aes_manager = AESManager() 
         self.ecc_manager = ecc_manager
         self.client_ed25519_public_key_bytes = client_ed25519_public_key_bytes
@@ -116,7 +119,7 @@ class ChatClient:
             print("[ERROR] [ChatClient] Gateway não encontrado. Verifique sua rede ou insira o IP manualmente.")
             if self.chat_widget:
                 self.chat_widget.add_message_to_chat("[ERROR] Gateway não encontrado. Verifique sua rede.")
-            return
+            return False # Return False on failure
 
         try:
             print(f"[INFO] [ChatClient] Tentando conectar ao servidor em {self.host}:{self.port}...")
@@ -126,8 +129,8 @@ class ChatClient:
             print("[INFO] [ChatClient] Iniciando handshake ECC...")
             server_handshake_data_b64 = self.client_socket.recv(4096).decode('utf-8')
             parts = server_handshake_data_b64.split('|')
-            if len(parts) != 2:
-                raise ValueError(f"Formato de handshake do servidor inválido. Partes esperadas: 3, recebidas: {len(parts)}. Dados: {server_handshake_data_b64[:100]}...")
+            if len(parts) != 2: # Expecting 2 parts now
+                raise ValueError(f"Formato de handshake do servidor inválido. Partes esperadas: 2, recebidas: {len(parts)}. Dados: {server_handshake_data_b64[:100]}...")
 
             server_x25519_public_b64 = parts[0]
             server_signature_b64 = parts[1]
@@ -169,10 +172,22 @@ class ChatClient:
             self.client_socket.sendall(encrypted_username_b64.encode('utf-8'))
             print("[INFO] [ChatClient] Nome de usuário enviado.")
 
+            # --- CORREÇÃO AQUI: Conectar sinais ao chat_widget e à MainWindow ---
             self.worker = ChatClientWorker(self.client_socket, self.aes_manager)
+            
+            # Conectar sinais do worker ao chat_widget para mensagens e erros de conexão
+            if self.chat_widget:
+                self.worker.message_received.connect(self.chat_widget.add_message_to_chat)
+                self.worker.connection_error.connect(self.chat_widget.add_message_to_chat)
+                # Os sinais 'disconnected' e 'specific_error' devem ser conectados à MainWindow
+                # ou a um gerenciador de estado que possa reagir a eles.
+                # O AppService já faz isso, então vamos garantir que o AppService os conecte.
+                # Não conecte aqui ao chat_widget.disconnected/specific_error, pois eles não existem.
+            
             self.thread = threading.Thread(target=self.worker.listen_for_messages, daemon=True)
             self.thread.start()
             print("[INFO] [ChatClient] Thread de escuta iniciada.")
+            return True # Return True on successful connection and worker start
 
         except socket.timeout:
             print(f"[ERROR] [ChatClient] Timeout ao tentar conectar ou durante o handshake com {self.host}:{self.port}.")
@@ -191,9 +206,11 @@ class ChatClient:
             if self.chat_widget:
                 self.chat_widget.add_message_to_chat(f"[CRITICAL] Erro fatal ao conectar: {e}. Tente novamente.")
 
+            # Ensure proper cleanup if connection fails before worker starts
+            # If worker was created, emit its disconnected signal
             if self.worker:
                 self.worker.disconnected.emit() 
-            else:
+            else: # If worker was not created, close the socket directly
                 if self.client_socket:
                     try:
                         self.client_socket.close()
@@ -202,7 +219,7 @@ class ChatClient:
                         print(f"[ERROR] [ChatClient] Erro ao fechar socket após falha de conexão: {close_e}")
                 if self.chat_widget:
                     self.chat_widget.add_message_to_chat("[ERROR] Conexão falhou antes de iniciar o worker.")
-
+        return False # Return False on any exception during connection
 
     def send_message(self, message):
         try:
@@ -215,12 +232,10 @@ class ChatClient:
             encrypted_data_b64 = f"{AESManager.bytes_to_base64(nonce)}|{AESManager.bytes_to_base64(ciphertext)}|{AESManager.bytes_to_base64(tag)}"
             
             self.client_socket.sendall(encrypted_data_b64.encode())
-            print(f"[DEBUG] [ChatClient] Mensagem enviada: {message[:50]}...") 
         except BrokenPipeError:
             print(f"[ERROR] [ChatClient] Conexão quebrada ao tentar enviar mensagem. Servidor pode ter desconectado.")
             if self.chat_widget:
                 self.chat_widget.add_message_to_chat(f"[ERROR] Erro ao enviar: Conexão perdida com o servidor.")
-            self.disconnected.emit() 
         except Exception as e:
             print(f"[ERROR] [ChatClient] Erro ao enviar mensagem: {e}")
             if self.chat_widget:

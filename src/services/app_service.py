@@ -94,6 +94,7 @@ class AppService:
                 return
 
             if verificar_conexao_com_host(server_ip_to_use, self.main_window.auth_port, client_password):
+                # Pass the main_window instance to join_hotspot_chat for signal connections
                 self.join_hotspot_chat(server_ip_to_use, username, client_ed25519_public_key_bytes)
             else:
                 self.show_error("Falha na Autenticação", f"Não foi possível autenticar com {server_ip_to_use}. Verifique a senha e o IP.")
@@ -125,39 +126,46 @@ class AppService:
         )
         self.main_window.chat_widget_instance.client = self.chat_client_instance
 
-        if self.chat_client_instance.worker: 
-            self.chat_client_instance.worker.message_received.connect(self.main_window.chat_widget_instance.add_message_to_chat)
-            self.chat_client_instance.worker.connection_error.connect(self.main_window.chat_widget_instance.add_message_to_chat)
-            self.chat_client_instance.worker.disconnected.connect(self.main_window.on_chat_disconnected)
-            self.chat_client_instance.worker.specific_error.connect(self.main_window.handle_specific_chat_error)
+        # --- CORREÇÃO AQUI: Conectar os sinais do worker aos slots da MainWindow ---
+        # O ChatClient.connect() agora retorna True/False e cria o worker e thread.
+        # Conectamos os sinais do worker AQUI, após o ChatClient.connect() ter sido chamado
+        # e o worker ter sido criado.
+        
+        # Call connect() and check its return value
+        connection_successful = self.chat_client_instance.connect() 
 
-        self.chat_client_instance.connect() 
-
-        if self.chat_client_instance.worker and self.chat_client_instance.thread.is_alive():
+        if connection_successful:
+            # Now that worker is guaranteed to exist if connection_successful is True
+            if self.chat_client_instance.worker:
+                self.chat_client_instance.worker.disconnected.connect(self.main_window.on_chat_disconnected)
+                self.chat_client_instance.worker.specific_error.connect(self.main_window.handle_specific_chat_error)
+            
             self.is_connected_to_chat = True
             self.main_window.show_chat_page()
         else:
             self.show_error("Erro de Conexão", "Não foi possível conectar ao servidor de chat. Verifique se o host está ativo e as portas estão corretas.")
             self.is_connected_to_chat = False
             self.main_window.show_home_page()
-            print("[ERROR] [AppService] Falha ao conectar ao chat. Worker não iniciado ou thread inativa.")
+            print("[ERROR] [AppService] Falha ao conectar ao chat. Conexão não estabelecida.")
+
 
     def disconnect_chat_client(self):
         if self.chat_client_instance:
             if self.chat_client_instance.worker:
-                if self.main_window.chat_widget_instance:
-                    try:
-                        self.chat_client_instance.worker.message_received.disconnect(self.main_window.chat_widget_instance.add_message_to_chat)
-                    except TypeError: pass 
-                    try:
-                        self.chat_client_instance.worker.connection_error.disconnect(self.main_window.chat_widget_instance.add_message_to_chat)
-                    except TypeError: pass
-                    try:
-                        self.chat_client_instance.worker.disconnected.disconnect(self.main_window.on_chat_disconnected)
-                    except TypeError: pass
-                    try:
-                        self.chat_client_instance.worker.specific_error.disconnect(self.main_window.handle_specific_chat_error)
-                    except TypeError: pass
+                # Disconnect signals to prevent issues if the widget is deleted
+                try:
+                    self.chat_client_instance.worker.message_received.disconnect(self.main_window.chat_widget_instance.add_message_to_chat)
+                except TypeError: pass 
+                try:
+                    self.chat_client_instance.worker.connection_error.disconnect(self.main_window.chat_widget_instance.add_message_to_chat)
+                except TypeError: pass
+                try:
+                    self.chat_client_instance.worker.disconnected.disconnect(self.main_window.on_chat_disconnected)
+                except TypeError: pass
+                try:
+                    self.chat_client_instance.worker.specific_error.disconnect(self.main_window.handle_specific_chat_error)
+                except TypeError: pass
+                
                 self.chat_client_instance.worker.stop()
                 self.chat_client_instance.worker = None
             self.chat_client_instance.disconnect()

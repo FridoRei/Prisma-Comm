@@ -72,6 +72,10 @@ def start_server(chat_widget_instance, port, host_ed25519_private_key: ed25519.E
                         conn.sendall(b"AUTH_REQUIRED\n") 
                         conn.close()
                         continue
+                    
+                if not self.dos_detector.anti_spam_message(client_ip):
+                    print(f"[WARNING] [ClientHandler] Mensagem de {self.username} ({self.addr[0]}) descartada por anti-spam.")
+                    continue                    
 
                 with authenticated_ips_lock:
                     if client_ip in authenticated_ips:
