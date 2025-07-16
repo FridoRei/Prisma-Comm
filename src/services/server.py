@@ -6,6 +6,7 @@ from src.core.chat.globals import authenticated_ips, authenticated_ips_lock, tem
 from src.core.auth.rsa_manager import RSAManager
 import datetime
 from src.core.network.dos_detector import DoSDetector
+from src.core.network.request_limiter import RequestLimiter
 
 RSA_KEY_LIFETIME_SECONDS = 10 
 
@@ -53,6 +54,7 @@ def handle_public_key_request(conn: socket.socket, addr: tuple, dos_detector: Do
 def run_auth_server(auth_port: int, stop_event: threading.Event, host_password: str, dos_detector: DoSDetector):
     udp_server_socket = None
     tcp_server_socket = None
+    request_limiter = RequestLimiter()
     try:
         udp_server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         udp_server_socket.bind(('0.0.0.0', auth_port))
@@ -78,7 +80,7 @@ def run_auth_server(auth_port: int, stop_event: threading.Event, host_password: 
 
             try:
                 tcp_conn, tcp_addr = tcp_server_socket.accept()
-                threading.Thread(target=handle_public_key_request, args=(tcp_conn, tcp_addr, dos_detector), daemon=True).start()
+                threading.Thread(target=handle_public_key_request, args=(tcp_conn, tcp_addr, dos_detector, request_limiter), daemon=True).start()
             except socket.timeout:
                 pass 
             except OSError as e:
@@ -90,7 +92,16 @@ def run_auth_server(auth_port: int, stop_event: threading.Event, host_password: 
                 print(f"[ERROR] [AuthServer] Erro inesperado ao aceitar conexão TCP: {e}")
             
             try:
-                encrypted_password_hash_from_client, addr = udp_server_socket.recvfrom(256)
+                encrypted_password_hash_from_client, addr = udp_server_socket.recvfrom(4096)
+                if request_limiter.is_request_too_large(encrypted_password_hash_from_client):
+                    print(f"[WARNING] [AuthServer] Requisição UDP de {addr} excedeu o limite de tamanho. Descartando.")
+                    udp_server_socket.sendto(b"CONNECTION_REFUSED", addr) 
+                    client_ip = addr[0]
+                    with temp_rsa_managers_lock:
+                        if client_ip in temp_rsa_managers:
+                            temp_rsa_managers[client_ip]["manager"].clear_keys()
+                            del temp_rsa_managers[client_ip]
+                    continue                
                 client_ip = addr[0]
 
                 if not dos_detector.check_and_record(client_ip):

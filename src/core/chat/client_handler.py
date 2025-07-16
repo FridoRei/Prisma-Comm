@@ -6,6 +6,7 @@ from src.core.crypto.ecc_manager import ECCManager
 from src.core.crypto.aes_manager import AESManager 
 from cryptography.hazmat.primitives.asymmetric import ed25519
 from src.core.network.dos_detector import DoSDetector
+from src.core.network.request_limiter import RequestLimiter 
 
 class ClientHandler(QObject): 
 
@@ -23,6 +24,7 @@ class ClientHandler(QObject):
         self.aes_manager = None 
         self.ecc_manager = ECCManager() 
         self.dos_detector = dos_detector
+        self.request_limiter = RequestLimiter()
         
         if host_ed25519_private_key:
             self.ecc_manager._ed25519_private_key = host_ed25519_private_key
@@ -72,6 +74,11 @@ class ClientHandler(QObject):
                 self.client_status_for_host.emit(f"[INFO] Chave X25519 e assinatura do servidor enviadas para {self.addr[0]}.")
 
                 client_handshake_response_b64 = self.client_socket.recv(2048).decode('utf-8').strip()
+                if self.request_limiter.is_request_too_large(client_handshake_response_b64.encode('utf-8')):
+                    print(f"[WARNING] [ClientHandler] Handshake de {self.addr[0]} excedeu o limite de tamanho. Encerrando conexão.")
+                    self.client_socket.sendall(b"ECC_HANDSHAKE_FAILURE")
+                    self.client_socket.close()
+                    return                
                 client_x25519_public_b64 = client_handshake_response_b64
 
                 if not client_x25519_public_b64:
@@ -113,6 +120,10 @@ class ClientHandler(QObject):
 
             try:
                 encrypted_username_b64 = self.client_socket.recv(1024).decode('utf-8').strip()
+                if self.request_limiter.is_request_too_large(encrypted_username_b64.encode('utf-8')):
+                    print(f"[WARNING] [ClientHandler] Nome de usuário de {self.addr[0]} excedeu o limite de tamanho. Encerrando conexão.")
+                    self.client_socket.close()
+                    return                
                 if encrypted_username_b64:
                     parts = encrypted_username_b64.split('|')
                     if len(parts) == 3:
@@ -152,8 +163,10 @@ class ClientHandler(QObject):
 
             while self._running: 
                 try:
-                    encrypted_message_b64 = self.client_socket.recv(2048).decode('utf-8') 
-                    
+                    encrypted_message_b64 = self.client_socket.recv(8192).decode('utf-8') 
+                    if self.request_limiter.is_request_too_large(encrypted_message_b64.encode('utf-8')):
+                        print(f"[WARNING] [ClientHandler] Mensagem de {self.username} ({self.addr[0]}) excedeu o limite de tamanho. Descartando.")
+                        continue                    
                     if not self.is_authenticated():
                         if self.dos_detector and not self.dos_detector.check_and_record(self.addr[0]):
                             print(f"[DoS] Bloqueio global para {self.addr[0]}")
