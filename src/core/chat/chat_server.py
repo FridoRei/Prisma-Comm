@@ -45,7 +45,7 @@ def start_server(chat_widget_instance, port, host_ed25519_private_key: ed25519.E
     try:
         server_socket.bind((host, port))
         server_socket.listen(5)
-        server_socket.settimeout(3.0)
+        server_socket.settimeout(7.0)
 
         if chat_widget_instance:
             chat_widget_instance.add_message_to_chat(f"[INFO] Servidor de chat iniciado em {host}:{port}")
