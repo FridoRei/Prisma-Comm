@@ -13,7 +13,7 @@ class ClientHandler(QObject):
     client_status_for_host = Signal(str)
     user_list_updated = Signal()
 
-    def __init__(self, client_socket, addr, host_ed25519_private_key: ed25519.Ed25519PrivateKey, host_ed25519_public_key_bytes: bytes, dos_detector: DoSDetector):
+    def __init__(self, client_socket, addr, host_ed25519_private_key: ed25519.Ed25519PrivateKey, dos_detector: DoSDetector):
         super().__init__()
         self.client_socket = client_socket
         self.addr = addr
@@ -28,14 +28,10 @@ class ClientHandler(QObject):
             self.ecc_manager._ed25519_private_key = host_ed25519_private_key
             self.ecc_manager._ed25519_public_key = host_ed25519_private_key.public_key()
             print(f"[DEBUG] [ClientHandler] Chave privada Ed25519 do host carregada para {self.addr[0]}.")
-        elif host_ed25519_public_key_bytes:
-            self.ecc_manager.load_ed25519_public_key(host_ed25519_public_key_bytes)
-            print(f"[WARNING] [ClientHandler] Apenas chave pública Ed25519 do host carregada para {self.addr[0]}. Assinatura não será possível.")
         else:
             print(f"[ERROR] [ClientHandler] Nenhuma chave Ed25519 do host fornecida para {self.addr[0]}. Handshake ECC pode falhar.")
 
         self.host_ed25519_private_key = host_ed25519_private_key
-        self.host_ed25519_public_key_bytes = host_ed25519_public_key_bytes
 
     def stop(self): 
         self._running = False
