@@ -391,17 +391,23 @@ class MainWindowUI:
         parent.logs_text_edit = QTextEdit()
         parent.logs_text_edit.setReadOnly(True)
         parent.logs_text_edit.setStyleSheet("""
-            background-color: #1e1e1f; /* Fundo escuro como terminal */
-            color: #00ff00; /* Texto verde como terminal */
+            background-color: #1e1e1f; 
+            color: #FFFFFF; 
             font-family: "Monospace";
             font-size: 10pt;
             border: none;
             padding: 5px;
+
+            span.DEBUG { color: #A9A9A9; }
+            span.INFO { color: #FFFFFF; } 
+            span.ERROR { color: #FF6347; } 
+            span.WARNING { color: #FFA500; } 
+            span.CRITICAL { color: #DC143C; }           
         """)
         logs_layout.addWidget(parent.logs_text_edit)
 
         parent.logs_page.setStyleSheet("""
-            background-color: #2e2e2f; /* Cor de fundo da página de logs */
+            background-color: #2e2e2f;
             border-radius: 15px;
             padding: 10px;
         """)
