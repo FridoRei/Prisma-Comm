@@ -173,9 +173,19 @@ class ChatClient:
 
             self.ecc_manager.clear_x25519_keys()
 
-            handshake_response = self.client_socket.recv(1024).decode('utf-8')
+            encrypted_handshake_response_b64 = self.client_socket.recv(1024).decode('utf-8')
+            encrypted_parts = encrypted_handshake_response_b64.split('|')
+            if len(encrypted_parts) != 3:
+                raise Exception(f"Formato de resposta de handshake ECC inválido. Esperado: 3 partes criptografadas. Recebido: '{encrypted_handshake_response_b64}'")
+            try:
+                nonce = AESManager.base64_to_bytes(encrypted_parts[0])
+                ciphertext = AESManager.base64_to_bytes(encrypted_parts[1])
+                tag = AESManager.base64_to_bytes(encrypted_parts[2])
+                handshake_response = self.aes_manager.decrypt(nonce, ciphertext, tag)
+            except Exception as e:
+                raise Exception(f"Falha ao descriptografar resposta de handshake ECC: {e}. Dados: {encrypted_handshake_response_b64[:100]}...")
             if handshake_response != "ECC_HANDSHAKE_SUCCESS":
-                raise Exception(f"Handshake ECC falhou. Resposta do servidor: '{handshake_response}'")
+                raise Exception(f"Handshake ECC falhou. Resposta descriptografada inesperada: '{handshake_response}'")
 
             nonce_username, ciphertext_username, tag_username = self.aes_manager.encrypt(self.nome_usuario)
             encrypted_username_b64 = f"{AESManager.bytes_to_base64(nonce_username)}|{AESManager.bytes_to_base64(ciphertext_username)}|{AESManager.bytes_to_base64(tag_username)}"

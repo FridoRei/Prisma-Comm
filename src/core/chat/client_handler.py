@@ -114,7 +114,11 @@ class ClientHandler(QObject):
 
                 self.ecc_manager.clear_x25519_keys()
 
-                self.client_socket.sendall(b"ECC_HANDSHAKE_SUCCESS")
+                handshake_success_message = "ECC_HANDSHAKE_SUCCESS"
+                nonce, ciphertext, tag = self.aes_manager.encrypt(handshake_success_message)
+                encrypted_handshake_success_b64 = f"{AESManager.bytes_to_base64(nonce)}|{AESManager.bytes_to_base64(ciphertext)}|{AESManager.bytes_to_base64(tag)}"
+                self.client_socket.sendall(encrypted_handshake_success_b64.encode('utf-8'))
+                
                 self.client_status_for_host.emit(f"[SUCCESS] Handshake ECC concluído com {self.addr[0]}.")
 
             except socket.timeout:
