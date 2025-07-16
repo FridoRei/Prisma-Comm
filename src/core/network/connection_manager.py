@@ -59,7 +59,6 @@ def verificar_conexao_com_host(ip, porta, password: str):
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
             sock.settimeout(5)
-            print(f"[INFO] [ConnectionManager] Gerando hash da senha para envio...")
             try:
                 password_hash_para_envio = gerar_hash_senha(password)
             except ValueError as ve:
@@ -73,7 +72,6 @@ def verificar_conexao_com_host(ip, porta, password: str):
                 print("[ERROR] [ConnectionManager] Falha ao gerar hash da senha para envio.")
                 return False
 
-            print(f"[INFO] [ConnectionManager] Criptografando hash da senha com a chave pública do servidor...")
             encrypted_password_hash = RSAManager.encrypt_with_public_key(
                 password_hash_para_envio.encode("utf-8"), server_public_key
             )
@@ -85,7 +83,6 @@ def verificar_conexao_com_host(ip, porta, password: str):
             print(f"[INFO] [ConnectionManager] Enviando hash criptografado para {ip}:{porta}...")
             sock.sendto(encrypted_password_hash, (ip, porta))
 
-            print(f"[INFO] [ConnectionManager] Aguardando resposta do servidor...")
             resposta_servidor_bytes, _ = sock.recvfrom(1024)
             
             try:
@@ -118,7 +115,6 @@ def obter_gateway_generico():
             ip_address = res[4][0]
             if ip_address != '127.0.0.1' and ip_address not in gateways:
                 gateways.append(ip_address)
-        print(f"[INFO] [ConnectionManager] IPs locais obtidos: {', '.join(gateways) if gateways else 'Nenhum'}")
     except Exception as e:
         print(f"[ERROR] [ConnectionManager] Erro ao obter IPs locais: {e}")
     return gateways if gateways else None

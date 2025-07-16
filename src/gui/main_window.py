@@ -88,12 +88,12 @@ class MainWindow(QMainWindow):
     @Slot()
     def show_home_page(self):
         self.stacked_widget.setCurrentWidget(self.home_page)
-        self.setWindowTitle("Conexão Segura - Início")
+        self.setWindowTitle("Prisma Comm - Início")
 
     @Slot()
     def show_settings_page(self):
         self.stacked_widget.setCurrentWidget(self.settings_page)
-        self.setWindowTitle("Conexão Segura - Configurações")
+        self.setWindowTitle("Prisma Comm - Configurações")
         self.username_entry.setText(self.current_username if self.current_username != DEFAULT_USERNAME else "")
         self.auth_port_entry.setText(str(self.auth_port))
         self.comm_port_entry.setText(str(self.comm_port))
@@ -105,12 +105,12 @@ class MainWindow(QMainWindow):
     @Slot()
     def show_chat_page(self):
         self.stacked_widget.setCurrentWidget(self.chat_page)
-        self.setWindowTitle("Conexão Segura - Chat")
+        self.setWindowTitle("Prisma Comm - Chat")
 
     @Slot()
     def show_logs_page(self):
         self.stacked_widget.setCurrentWidget(self.logs_page)
-        self.setWindowTitle("Conexão Segura - Logs")
+        self.setWindowTitle("Prisma Comm - Logs")
 
     @Slot()
     def save_settings(self):

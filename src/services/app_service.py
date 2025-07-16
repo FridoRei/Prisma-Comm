@@ -93,8 +93,7 @@ class AppService:
                 print(f"[ERROR] [AppService] Endereço IP inválido ou não encontrado: {server_ip_to_use}")
                 return
 
-            if verificar_conexao_com_host(server_ip_to_use, self.main_window.auth_port, client_password):
-                # Pass the main_window instance to join_hotspot_chat for signal connections
+            if verificar_conexao_com_host(server_ip_to_use, self.main_window.auth_port, client_password):                
                 self.join_hotspot_chat(server_ip_to_use, username, client_ed25519_public_key_bytes)
             else:
                 self.show_error("Falha na Autenticação", f"Não foi possível autenticar com {server_ip_to_use}. Verifique a senha e o IP.")
@@ -126,16 +125,9 @@ class AppService:
         )
         self.main_window.chat_widget_instance.client = self.chat_client_instance
 
-        # --- CORREÇÃO AQUI: Conectar os sinais do worker aos slots da MainWindow ---
-        # O ChatClient.connect() agora retorna True/False e cria o worker e thread.
-        # Conectamos os sinais do worker AQUI, após o ChatClient.connect() ter sido chamado
-        # e o worker ter sido criado.
-        
-        # Call connect() and check its return value
         connection_successful = self.chat_client_instance.connect() 
 
         if connection_successful:
-            # Now that worker is guaranteed to exist if connection_successful is True
             if self.chat_client_instance.worker:
                 self.chat_client_instance.worker.disconnected.connect(self.main_window.on_chat_disconnected)
                 self.chat_client_instance.worker.specific_error.connect(self.main_window.handle_specific_chat_error)
@@ -152,7 +144,6 @@ class AppService:
     def disconnect_chat_client(self):
         if self.chat_client_instance:
             if self.chat_client_instance.worker:
-                # Disconnect signals to prevent issues if the widget is deleted
                 try:
                     self.chat_client_instance.worker.message_received.disconnect(self.main_window.chat_widget_instance.add_message_to_chat)
                 except TypeError: pass 
@@ -170,7 +161,6 @@ class AppService:
                 self.chat_client_instance.worker = None
             self.chat_client_instance.disconnect()
             self.chat_client_instance = None
-            print("[INFO] [AppService] Cliente de chat desconectado e recursos liberados.")
 
     def shutdown(self):
         self.auth_service.stop_server()
@@ -182,7 +172,6 @@ class AppService:
         
         self.disconnect_chat_client()
         self.dos_detector.stop()
-        print("[INFO] [AppService] Shutdown de serviços concluído.")
 
         with authenticated_ips_lock:
             authenticated_ips.clear()

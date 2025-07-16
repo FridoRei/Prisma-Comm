@@ -13,7 +13,6 @@ def broadcast_from_host(message: str, chat_widget_instance):
         return
     
     message_with_prefix = f"[Host] {message}"
-    print(f"[INFO] [ChatServer] Broadcast de host: {message_with_prefix[:100]}...")
 
     with clientes_lock:
         current_handlers = handlers.copy() 
@@ -46,7 +45,6 @@ def start_server(chat_widget_instance, port, host_ed25519_private_key: ed25519.E
         server_socket.bind((host, port))
         server_socket.listen(5) 
         server_socket.settimeout(1.0) 
-        print(f"[SUCCESS] [ChatServer] Servidor de chat escutando em {host}:{port}")
 
         if chat_widget_instance:
             chat_widget_instance.add_message_to_chat(f"[INFO] Servidor de chat iniciado em {host}:{port}")

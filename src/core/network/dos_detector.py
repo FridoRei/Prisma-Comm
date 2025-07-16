@@ -40,7 +40,6 @@ class DoSDetector:
                         ips_to_unblock.append(ip)
                 for ip in ips_to_unblock:
                     del self.blocked_ips[ip]
-                    print(f"[INFO] [DoSDetector] IP {ip} desbloqueado após {self.block_duration}s.")
             time.sleep(1) 
 
     def check_and_record(self, ip_address: str) -> bool:

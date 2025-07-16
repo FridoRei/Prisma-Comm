@@ -39,7 +39,6 @@ def handle_public_key_request(conn: socket.socket, addr: tuple, dos_detector: Do
                     "manager": current_rsa_manager,
                     "timestamp": datetime.datetime.now()
                 }
-                print(f"[DEBUG] [AuthServer] Chave RSA temporária armazenada para {client_ip}.")
         else:
             conn.sendall(b"ERROR: Public key not available")
             print(f"[ERROR] [AuthServer] Erro: Chave pública RSA não disponível para {addr} após geração.")
@@ -48,7 +47,6 @@ def handle_public_key_request(conn: socket.socket, addr: tuple, dos_detector: Do
     finally:
         try:
             conn.close()
-            print(f"[DEBUG] [AuthServer] Conexão TCP com {addr} fechada.")
         except Exception as e:
             print(f"[ERROR] [AuthServer] Erro ao fechar conexão TCP com {addr}: {e}")
 
@@ -77,7 +75,6 @@ def run_auth_server(auth_port: int, stop_event: threading.Event, host_password: 
                     if ip in temp_rsa_managers:
                         temp_rsa_managers[ip]["manager"].clear_keys()
                         del temp_rsa_managers[ip]
-                        print(f"[INFO] [AuthServer] Chave RSA temporária para {ip} expirada e removida.")
 
             try:
                 tcp_conn, tcp_addr = tcp_server_socket.accept()
@@ -105,8 +102,6 @@ def run_auth_server(auth_port: int, stop_event: threading.Event, host_password: 
                             del temp_rsa_managers[client_ip]
                     continue 
 
-                print(f"[INFO] [AuthServer] Recebida tentativa de autenticação de {addr}.")
-
                 with authenticated_ips_lock:
                     if client_ip in authenticated_ips:
                         print(f"[WARNING] [AuthServer] Cliente {client_ip} já autenticado. Recusando nova tentativa de autenticação.")
@@ -130,7 +125,6 @@ def run_auth_server(auth_port: int, stop_event: threading.Event, host_password: 
 
                 try:
                     decrypted_client_password_hash = current_rsa_manager.decrypt_string(encrypted_password_hash_from_client)
-                    print(f"[DEBUG] [AuthServer] Hash da senha do cliente descriptografado para {client_ip}.")
                     if verificar_senha(host_password, decrypted_client_password_hash):
                         with authenticated_ips_lock:
                             authenticated_ips.add(client_ip)
@@ -147,7 +141,6 @@ def run_auth_server(auth_port: int, stop_event: threading.Event, host_password: 
                         if client_ip in temp_rsa_managers:
                             temp_rsa_managers[client_ip]["manager"].clear_keys()
                             del temp_rsa_managers[client_ip]
-                            print(f"[DEBUG] [AuthServer] Chave RSA temporária para {client_ip} removida após autenticação.")
 
             except socket.timeout:
                 pass 

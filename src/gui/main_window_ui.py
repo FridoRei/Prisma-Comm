@@ -17,7 +17,7 @@ client_ico = os.path.join(icons_dir, 'client.ico')
 
 class MainWindowUI:
     def setup_ui(self, parent):
-        parent.setWindowTitle("Conexão Segura")
+        parent.setWindowTitle("Prisma Comm")
         parent.resize(800, 400)
 
         parent.central_widget = QWidget()
