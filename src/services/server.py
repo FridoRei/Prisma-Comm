@@ -33,7 +33,7 @@ def handle_public_key_request(conn: socket.socket, addr: tuple, dos_detector: Do
     client_ip = addr[0]
     if not dos_detector.check_and_record(client_ip):
         print(f"[WARNING] [AuthServer] Requisição de chave pública de {addr} bloqueada por DoSDetector.")
-        conn.sendall(b"BLOCKED_BY_DOS_DETECTOR\n")
+        conn.sendall(b"REFUSED\n")
         conn.close()
         return
 
@@ -141,7 +141,7 @@ def run_auth_server(auth_port: int, stop_event: threading.Event, host_password: 
 
                 if not dos_detector.check_and_record(client_ip):
                     print(f"[WARNING] [AuthServer] Tentativa de autenticação de {addr} bloqueada por DoSDetector.")
-                    udp_server_socket.sendto(b"BLOCKED_BY_DOS_DETECTOR", addr)
+                    udp_server_socket.sendto(b"REFUSED", addr)
                     with temp_rsa_managers_lock:
                         if client_ip in temp_rsa_managers:
                             temp_rsa_managers[client_ip]["manager"].clear_keys()

@@ -61,14 +61,14 @@ def start_server(chat_widget_instance, port, host_ed25519_private_key: ed25519.E
 
                 if not dos_detector.check_and_record(client_ip):
                     print(f"[WARNING] [ChatServer] Conexão de chat de {addr} bloqueada por DoSDetector.")
-                    conn.sendall(b"BLOCKED_BY_DOS_DETECTOR\n")
+                    conn.sendall(b"REFUSED\n")
                     conn.close()
                     continue
 
                 with connected_users_lock:
                     if client_ip in connected_users:
                         print(f"[WARNING] [ChatServer] Cliente {client_ip} já está conectado. Recusando nova conexão.")
-                        conn.sendall(b"ALREADY_CONNECTED\n") 
+                        conn.sendall(b"REFUSED\n") 
                         conn.close()
                         continue
 
