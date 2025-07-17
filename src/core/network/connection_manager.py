@@ -114,9 +114,9 @@ def verificar_conexao_com_host(ip, porta, password: str, timeout_rsa: int, timeo
                 print(f"[ERROR] [ConnectionManager] Resposta do servidor de {ip}:{porta} não é uma string UTF-8 válida. Conteúdo: {resposta_servidor_bytes.hex()}")
                 resposta_servidor = "INVALID_RESPONSE_ENCODING"
 
-            if resposta_servidor == "AUTH_SUCCESS": 
-                print(f"[SUCCESS] [ConnectionManager] Autenticação bem-sucedida!")
-                return True
+            if resposta_servidor == "AUTH_FAILURE": 
+                print(f"[WARNING] [ConnectionManager] Autenticação falhou. Senha incorreta.")
+                return False
             elif resposta_servidor == "REQUEST_TOO_LARGE":
                 print(f"[WARNING] [ConnectionManager] Autenticação falhou. Requisição muito grande para o servidor.")
                 return False
@@ -127,8 +127,9 @@ def verificar_conexao_com_host(ip, porta, password: str, timeout_rsa: int, timeo
                 print(f"[WARNING] [ConnectionManager] Autenticação falhou. Resposta do servidor: '{resposta_servidor}'")
                 return False
 
-    except socket.timeout:
-        print(f"[ERROR] [ConnectionManager] Timeout na conexão com o host de autenticação ({ip}:{porta}). O servidor não respondeu ao hash da senha UDP.")
+        except socket.timeout:
+            print(f"[INFO] [ConnectionManager] Timeout para resposta à senha.")
+            return True
     except socket.error as se:
         print(f"[ERROR] [ConnectionManager] Erro de socket ao tentar conectar com {ip}:{porta}: {se}")
     except Exception as e:
