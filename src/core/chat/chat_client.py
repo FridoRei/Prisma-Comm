@@ -119,11 +119,6 @@ class ChatClient:
             self.client_socket.connect((self.host, self.port))
             print(f"[SUCCESS] [ChatClient] Conectado ao servidor em {self.host}:{self.port}")
 
-            server_handshake_data_b64 = self.client_socket.recv(4096).decode('utf-8')
-            parts = server_handshake_data_b64.split('|')
-            if len(parts) != 2:
-                raise ValueError(f"Formato de handshake do servidor inválido. Partes esperadas: 2, recebidas: {len(parts)}. Dados: {server_handshake_data_b64[:100]}...")
-
             server_x25519_public_b64 = parts[0]
             server_signature_b64 = parts[1]
 

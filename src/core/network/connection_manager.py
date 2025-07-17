@@ -81,7 +81,7 @@ def verificar_conexao_com_host(ip, porta, password: str, timeout_rsa: int, timeo
 
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-            sock.settimeout(timeout_passowrd_response)
+            sock.settimeout(timeout_passowrd_response)  
             try:
                 password_hash_para_envio = gerar_hash_senha(password)
             except ValueError as ve:
@@ -106,30 +106,35 @@ def verificar_conexao_com_host(ip, porta, password: str, timeout_rsa: int, timeo
             print(f"[INFO] [ConnectionManager] Enviando hash criptografado para {ip}:{porta}...")
             sock.sendto(encrypted_password_hash, (ip, porta))
 
-            resposta_servidor_bytes, _ = sock.recvfrom(1024)
+            try:
+                resposta_servidor_bytes, _ = sock.recvfrom(1024)
 
-            if is_utf8_valid(resposta_servidor_bytes):
-                resposta_servidor = resposta_servidor_bytes.decode('utf-8').strip()
-            else:
-                print(f"[ERROR] [ConnectionManager] Resposta do servidor de {ip}:{porta} não é uma string UTF-8 válida. Conteúdo: {resposta_servidor_bytes.hex()}")
-                resposta_servidor = "INVALID_RESPONSE_ENCODING"
+                if is_utf8_valid(resposta_servidor_bytes):
+                    resposta_servidor = resposta_servidor_bytes.decode('utf-8').strip()
+                else:
+                    print(f"[ERROR] [ConnectionManager] Resposta do servidor de {ip}:{porta} não é uma string UTF-8 válida. Conteúdo: {resposta_servidor_bytes.hex()}")
+                    resposta_servidor = "INVALID_RESPONSE_ENCODING"
 
-            if resposta_servidor == "AUTH_FAILURE": 
-                print(f"[WARNING] [ConnectionManager] Autenticação falhou. Senha incorreta.")
-                return False
-            elif resposta_servidor == "REQUEST_TOO_LARGE":
-                print(f"[WARNING] [ConnectionManager] Autenticação falhou. Requisição muito grande para o servidor.")
-                return False
-            elif resposta_servidor == "ALREADY_AUTHENTICATED": 
-                print(f"[INFO] [ConnectionManager] Cliente já autenticado no servidor de autenticação (resposta UDP).")
-                return True 
-            else:
-                print(f"[WARNING] [ConnectionManager] Autenticação falhou. Resposta do servidor: '{resposta_servidor}'")
-                return False
+                if resposta_servidor == "AUTH_FAILURE":
+                    print(f"[WARNING] [ConnectionManager] Autenticação falhou. Senha incorreta.")
+                    return False
+                elif resposta_servidor == "REQUEST_TOO_LARGE":
+                    print(f"[WARNING] [ConnectionManager] Autenticação falhou. Requisição muito grande para o servidor.")
+                    return False
+                elif resposta_servidor == "ALREADY_AUTHENTICATED":
+                    print(f"[INFO] [ConnectionManager] Cliente já autenticado no servidor de autenticação (resposta UDP).")
+                    return True
+                elif resposta_servidor == "REFUSED": 
+                    print(f"[WARNING] [ConnectionManager] Autenticação falhou. Requisição recusada pelo servidor (DoS).")
+                    return False
+                else:
+                    print(f"[WARNING] [ConnectionManager] Autenticação falhou. Resposta inesperada do servidor: '{resposta_servidor}'")
+                    return False
 
-        except socket.timeout:
-            print(f"[INFO] [ConnectionManager] Timeout para resposta à senha.")
-            return True
+            except socket.timeout:
+                print(f"[SUCCESS] [ConnectionManager] Autenticação bem-sucedida! Servidor não enviou resposta de erro dentro do timeout.")
+                return True
+
     except socket.error as se:
         print(f"[ERROR] [ConnectionManager] Erro de socket ao tentar conectar com {ip}:{porta}: {se}")
     except Exception as e:
