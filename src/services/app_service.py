@@ -99,9 +99,9 @@ class AppService:
                 print(f"[ERROR] [AppService] Endereço IP inválido ou não encontrado: {server_ip_to_use}")
                 return
 
-            session_token = verificar_conexao_com_host(server_ip_to_use, self.main_window.auth_port, client_password, self.timeout_settings['client_rsa_timeout'], self.timeout_settings['client_password_response_timeout'])
-            if session_token: 
-                self.join_hotspot_chat(server_ip_to_use, username, client_ed25519_public_key_bytes, session_token)
+            authentication_successful = verificar_conexao_com_host(server_ip_to_use, self.main_window.auth_port, client_password, self.timeout_settings['client_rsa_timeout'], self.timeout_settings['client_password_response_timeout'])
+            if authentication_successful: 
+                self.join_hotspot_chat(server_ip_to_use, username, client_ed25519_public_key_bytes) 
             else:
                 self.show_error("Falha na Autenticação", f"Não foi possível autenticar com {server_ip_to_use}. Verifique a senha e o IP.")
                 print(f"[ERROR] [AppService] Falha na autenticação com {server_ip_to_use}.")
@@ -117,7 +117,7 @@ class AppService:
             print(f"[ERROR] [AppService] Formato de IP inválido: {ip}")
             return False
 
-    def join_hotspot_chat(self, server_ip: str, username: str, client_ed25519_public_key_bytes: bytes, session_token: str):
+    def join_hotspot_chat(self, server_ip: str, username: str, client_ed25519_public_key_bytes: bytes):
         self.disconnect_chat_client()
 
         self.main_window.setup_chat_widget(is_host=False)
@@ -129,7 +129,6 @@ class AppService:
             username,
             self.ecc_manager,
             client_ed25519_public_key_bytes,
-            session_token,
             self.timeout_settings['client_message_receive_timeout'],
             self.timeout_settings['client_handshake_timeout']
         )

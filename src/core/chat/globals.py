@@ -10,9 +10,6 @@ temp_rsa_managers_lock = threading.Lock()
 connected_users = {}
 connected_users_lock = threading.Lock()
 
-authenticated_sessions = {}
-authenticated_sessions_lock = threading.Lock()
-
-ip_to_token_map = {}
-ip_to_token_map_lock = threading.Lock()
+authenticated_ips = {}
+authenticated_ips_lock = threading.Lock()
 

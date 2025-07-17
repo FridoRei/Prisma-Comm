@@ -1,6 +1,6 @@
 import socket
 import threading
-from src.core.chat.globals import clientes_lock, handlers, connected_users_lock, connected_users, authenticated_sessions, authenticated_sessions_lock, ip_to_token_map_lock, ip_to_token_map
+from src.core.chat.globals import clientes_lock, handlers, connected_users_lock, connected_users, authenticated_ips, authenticated_ips_lock
 from src.core.chat.client_handler import ClientHandler
 from cryptography.hazmat.primitives.asymmetric import ed25519
 from src.core.network.dos_detector import DoSDetector
@@ -72,39 +72,14 @@ def start_server(chat_widget_instance, port, host_ed25519_private_key: ed25519.E
                         conn.close()
                         continue
 
-                token_data = conn.recv(1024).decode('utf-8').strip()
-                if not token_data.startswith("SESSION_TOKEN:"):
-                    print(f"[WARNING] [ChatServer] Conexão de {client_ip} rejeitada: Token de sessão ausente ou formato inválido.")
-                    conn.sendall(b"AUTH_REQUIRED\n") 
-                    conn.close()
-                    continue
-
-                session_token = token_data.split(":", 1)[1]
-
-                is_token_valid = False
-                with authenticated_sessions_lock:
-                    token_info = authenticated_sessions.get(session_token)
-                    if token_info:
-                        if token_info["ip"] == client_ip:
-                            if datetime.datetime.now() - token_info["timestamp"] < datetime.timedelta(seconds=300):
-                                is_token_valid = True
-                            else:
-                                print(f"[WARNING] [ChatServer] Token de sessão de {client_ip} expirado.")
-                        else:
-                            print(f"[WARNING] [ChatServer] Token de sessão de {client_ip} inválido: IP não corresponde.")
-                    else:
-                        print(f"[WARNING] [ChatServer] Token de sessão de {client_ip} não encontrado na lista de sessões ativas.")
-
-                if is_token_valid:
-                    with authenticated_sessions_lock:
-                        if session_token in authenticated_sessions:
-                            del authenticated_sessions[session_token]
-                    with ip_to_token_map_lock:
-                        if client_ip in ip_to_token_map and ip_to_token_map[client_ip] == session_token:
-                            del ip_to_token_map[client_ip]
-
-                    conn.sendall(b"TOKEN_ACCEPTED\n")
-                    print(f"[INFO] [ChatServer] Conexão ao chat de {client_ip} aceita (token válido).")
+                is_ip_authenticated = False
+                with authenticated_ips_lock:
+                    if client_ip in authenticated_ips:                        
+                        is_ip_authenticated = True
+                        del authenticated_ips[client_ip] 
+                if is_ip_authenticated:
+                    conn.sendall(b"ACCEPTED\n") 
+                    print(f"[INFO] [ChatServer] Conexão ao chat de {client_ip} aceita (IP autenticado).")
 
                     handler = ClientHandler(conn, addr, host_ed25519_private_key, dos_detector, host_client_data_receive_timeout)
 
@@ -117,8 +92,8 @@ def start_server(chat_widget_instance, port, host_ed25519_private_key: ed25519.E
 
                     thread.start()
                 else:
-                    print(f"[WARNING] [ChatServer] Conexão ao chat de {client_ip} rejeitada. Token de sessão inválido ou expirado.")
-                    conn.sendall(b"INVALID_SESSION_TOKEN\n")
+                    print(f"[WARNING] [ChatServer] Conexão ao chat de {client_ip} rejeitada.")
+                    conn.sendall(b"AUTH_REQUIRED\n")
                     conn.close()
 
             except socket.timeout:

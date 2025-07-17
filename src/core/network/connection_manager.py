@@ -59,8 +59,6 @@ def get_server_public_key(server_ip, auth_port, timeout_rsa):
     return None
 
 def verificar_conexao_com_host(ip, porta, password: str, timeout_rsa: int, timeout_passowrd_response: int):
-    global client_session_token
-
     if not ip:
         print("[ERROR] [ConnectionManager] Endereço IP do host não fornecido.")
         return False
@@ -116,15 +114,9 @@ def verificar_conexao_com_host(ip, porta, password: str, timeout_rsa: int, timeo
                 print(f"[ERROR] [ConnectionManager] Resposta do servidor de {ip}:{porta} não é uma string UTF-8 válida. Conteúdo: {resposta_servidor_bytes.hex()}")
                 resposta_servidor = "INVALID_RESPONSE_ENCODING"
 
-            if resposta_servidor.startswith("AUTH_SUCCESS:"):
-                parts = resposta_servidor.split(":", 1)
-                if len(parts) == 2:
-                    client_session_token = parts[1] 
-                    print(f"[SUCCESS] [ConnectionManager] Autenticação bem-sucedida!")
-                    return client_session_token
-                else:
-                    print(f"[WARNING] [ConnectionManager] Formato de resposta AUTH_SUCCESS inválido: '{resposta_servidor}'")
-                    return False
+            if resposta_servidor == "AUTH_SUCCESS": 
+                print(f"[SUCCESS] [ConnectionManager] Autenticação bem-sucedida!")
+                return True
             elif resposta_servidor == "REQUEST_TOO_LARGE":
                 print(f"[WARNING] [ConnectionManager] Autenticação falhou. Requisição muito grande para o servidor.")
                 return False

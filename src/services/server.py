@@ -2,7 +2,7 @@ import socket
 import threading
 import time
 from src.core.auth.token_manager import verificar_senha
-from src.core.chat.globals import temp_rsa_managers, temp_rsa_managers_lock, authenticated_sessions, authenticated_sessions_lock, ip_to_token_map, ip_to_token_map_lock 
+from src.core.chat.globals import temp_rsa_managers, temp_rsa_managers_lock, authenticated_ips, authenticated_ips_lock
 from src.core.auth.rsa_manager import RSAManager
 import datetime
 from src.core.network.dos_detector import DoSDetector
@@ -12,21 +12,6 @@ import uuid
 RSA_KEY_LIFETIME_SECONDS = 10
 RSA_MAX_SIMULTANEOUS_KEYS = 20
 REQUEST_MAX_LENGTH = 600
-SESSION_TOKEN_LIFETIME_SECONDS = 300 
-def cleanup_expired_session_tokens():
-    current_time = datetime.datetime.now()
-    with authenticated_sessions_lock:
-        tokens_to_remove = []
-        for token, data in authenticated_sessions.items():
-            if current_time - data["timestamp"] > datetime.timedelta(seconds=SESSION_TOKEN_LIFETIME_SECONDS):
-                tokens_to_remove.append(token)
-        for token in tokens_to_remove:
-            ip = authenticated_sessions[token]["ip"]
-            del authenticated_sessions[token]
-            with ip_to_token_map_lock:
-                if ip in ip_to_token_map and ip_to_token_map[ip] == token:
-                    del ip_to_token_map[ip]
-            print(f"[INFO] [AuthServer] Token de sessão expirado para IP {ip} (token: {token[:8]}...).")
 
 
 def handle_public_key_request(conn: socket.socket, addr: tuple, dos_detector: DoSDetector, request_limiter: RequestLimiter):
@@ -38,12 +23,6 @@ def handle_public_key_request(conn: socket.socket, addr: tuple, dos_detector: Do
         return
 
     try:
-        with ip_to_token_map_lock:
-            if client_ip in ip_to_token_map:
-                print(f"[WARNING] [AuthServer] Requisição de chave pública de {addr} recusada: cliente já possui token de sessão ativo.")
-                conn.sendall(b"ALREADY_AUTHENTICATED\n") 
-                return
-
         print(f"[INFO] [AuthServer] Recebida requisição de chave pública de {addr}.")
 
         current_rsa_manager = RSAManager()
@@ -99,9 +78,6 @@ def run_auth_server(auth_port: int, stop_event: threading.Event, host_password: 
 
         print(f"[INFO] [AuthServer] Servidor de autenticação iniciado na porta {auth_port}.")
 
-        cleanup_thread = threading.Thread(target=lambda: _run_cleanup_loop(stop_event), daemon=True)
-        cleanup_thread.start()
-
         while not stop_event.is_set():
             with temp_rsa_managers_lock:
                 keys_to_remove = []
@@ -147,17 +123,7 @@ def run_auth_server(auth_port: int, stop_event: threading.Event, host_password: 
                             temp_rsa_managers[client_ip]["manager"].clear_keys()
                             del temp_rsa_managers[client_ip]
                     continue
-
-                with ip_to_token_map_lock:
-                    if client_ip in ip_to_token_map:
-                        print(f"[WARNING] [AuthServer] Cliente {client_ip} já autenticado (token ativo). Recusando nova tentativa de autenticação.")
-                        udp_server_socket.sendto(b"ALREADY_AUTHENTICATED", addr)
-                        with temp_rsa_managers_lock:
-                            if client_ip in temp_rsa_managers:
-                                temp_rsa_managers[client_ip]["manager"].clear_keys()
-                                del temp_rsa_managers[client_ip]
-                        continue
-
+                
                 current_rsa_manager_data = None
                 with temp_rsa_managers_lock:
                     current_rsa_manager_data = temp_rsa_managers.get(client_ip)
@@ -172,16 +138,6 @@ def run_auth_server(auth_port: int, stop_event: threading.Event, host_password: 
                 try:
                     decrypted_client_password_hash = current_rsa_manager.decrypt_string(encrypted_password_hash_from_client)
                     if verificar_senha(host_password, decrypted_client_password_hash):
-                        session_token = str(uuid.uuid4())
-                        with authenticated_sessions_lock:
-                            authenticated_sessions[session_token] = {
-                                "ip": client_ip,
-                                "timestamp": datetime.datetime.now()
-                            }
-                        with ip_to_token_map_lock:
-                            ip_to_token_map[client_ip] = session_token
-
-                        udp_server_socket.sendto(f"AUTH_SUCCESS:{session_token}".encode('utf-8'), addr) 
                         print(f"[SUCCESS] [AuthServer] Autenticação BEM-SUCEDIDA para {client_ip}.")
                     else:
                         udp_server_socket.sendto(b"AUTH_FAILURE", addr)
@@ -207,10 +163,6 @@ def run_auth_server(auth_port: int, stop_event: threading.Event, host_password: 
 
     finally:
         stop_event.set()
-        if cleanup_thread.is_alive():
-            cleanup_thread.join(timeout=2)
-            if cleanup_thread.is_alive():
-                print("[WARNING] [AuthServer] Thread de limpeza de tokens não encerrou em tempo.")
 
         if udp_server_socket:
             udp_server_socket.close()
@@ -220,8 +172,4 @@ def run_auth_server(auth_port: int, stop_event: threading.Event, host_password: 
             print("[INFO] [AuthServer] Socket TCP do servidor de autenticação fechado.")
         print("[INFO] [AuthServer] Servidor de autenticação encerrado.")
 
-def _run_cleanup_loop(stop_event: threading.Event):
-    while not stop_event.is_set():
-        cleanup_expired_session_tokens()
-        time.sleep(10) 
 

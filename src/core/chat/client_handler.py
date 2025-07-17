@@ -1,7 +1,7 @@
 import traceback
 import socket
 from PySide6.QtCore import QObject, Signal, Slot
-from src.core.chat.globals import clientes_lock, handlers, client_aes_keys, client_aes_keys_lock, connected_users, connected_users_lock, authenticated_sessions, authenticated_sessions_lock, ip_to_token_map, ip_to_token_map_lock 
+from src.core.chat.globals import clientes_lock, handlers, client_aes_keys, client_aes_keys_lock, connected_users, connected_users_lock, authenticated_ips, authenticated_ips_lock
 from src.core.crypto.ecc_manager import ECCManager
 from src.core.crypto.aes_manager import AESManager
 from cryptography.hazmat.primitives.asymmetric import ed25519
@@ -34,7 +34,6 @@ class ClientHandler(QObject):
         self.ecc_manager = ECCManager()
         self.dos_detector = dos_detector
         self.request_limiter = RequestLimiter(max_length=CHAT_MESSAGE_MAX_LENGTH)
-        self.session_token = None
 
         if host_ed25519_private_key:
             self.ecc_manager._ed25519_private_key = host_ed25519_private_key
@@ -249,15 +248,6 @@ class ClientHandler(QObject):
             with clientes_lock:
                 if self in handlers:
                     handlers.remove(self)
-
-            with ip_to_token_map_lock:
-                if client_ip in ip_to_token_map:
-                    token_to_remove = ip_to_token_map[client_ip]
-                    del ip_to_token_map[client_ip]
-                    with authenticated_sessions_lock:
-                        if token_to_remove in authenticated_sessions:
-                            del authenticated_sessions[token_to_remove]
-                            print(f"[INFO] [ClientHandler] Token de sessão {token_to_remove[:8]}... removido ao desconectar cliente {client_ip}.")
 
             with client_aes_keys_lock:
                 if client_ip in client_aes_keys:

@@ -10,12 +10,11 @@ class ChatClientWorker(QObject):
     disconnected = Signal()
     specific_error = Signal(str)
 
-    def __init__(self, client_socket, aes_manager: AESManager, session_token):
+    def __init__(self, client_socket, aes_manager: AESManager):
         super().__init__()
         self.client_socket = client_socket
         self.aes_manager = aes_manager
         self._running = True
-        self.session_token = session_token
 
     def stop(self):
         self._running = False
@@ -50,11 +49,6 @@ class ChatClientWorker(QObject):
                     elif encrypted_message_b64 == "ECC_HANDSHAKE_FAILURE":
                         self.specific_error.emit("[ERROR] Handshake de criptografia falhou com o servidor.")
                         print("[ERROR] [ChatClientWorker] Handshake ECC falhou com o servidor.")
-                        self.disconnected.emit()
-                        break
-                    elif encrypted_message_b64 == "INVALID_SESSION_TOKEN": 
-                        self.specific_error.emit("[ERROR] Token de sessão inválido ou expirado. Por favor, autentique-se novamente.")
-                        print("[WARNING] [ChatClientWorker] Servidor recusou conexão: token de sessão inválido.")
                         self.disconnected.emit()
                         break
                     else:
@@ -99,7 +93,7 @@ class ChatClientWorker(QObject):
         print("[INFO] [ChatClientWorker] Thread de escuta encerrada.")
 
 class ChatClient:
-    def __init__(self, host_ip, port, chat_widget=None, nome_usuario="Usuário", ecc_manager=None, client_ed25519_public_key_bytes: bytes = None, session_token: str = None, recive_timeout: int = 1, handshake_timeout: int = 5):
+    def __init__(self, host_ip, port, chat_widget=None, nome_usuario="Usuário", ecc_manager=None, client_ed25519_public_key_bytes: bytes = None, recive_timeout: int = 1, handshake_timeout: int = 5):
         self.host = host_ip
         self.port = port
         self.chat_widget = chat_widget
@@ -107,7 +101,6 @@ class ChatClient:
         self.nome_usuario = nome_usuario
         self.worker = None
         self.thread = None
-        self.session_token = session_token
         self.aes_manager = AESManager()
         self.ecc_manager = ecc_manager
         self.client_ed25519_public_key_bytes = client_ed25519_public_key_bytes
@@ -120,30 +113,11 @@ class ChatClient:
             if self.chat_widget:
                 self.chat_widget.add_message_to_chat("[ERROR] Gateway não encontrado. Verifique sua rede.")
             return False
-
-        if not self.session_token:
-            print("[ERROR] [ChatClient] Nenhum token de sessão encontrado. Autentique-se primeiro.")
-            if self.chat_widget:
-                self.chat_widget.add_message_to_chat("[ERROR] Nenhum token de sessão. Autentique-se primeiro.")
-            return False
-
         try:
             print(f"[INFO] [ChatClient] Tentando conectar ao servidor em {self.host}:{self.port}...")
             self.client_socket.settimeout(self.handshake_timeout)
             self.client_socket.connect((self.host, self.port))
             print(f"[SUCCESS] [ChatClient] Conectado ao servidor em {self.host}:{self.port}")
-
-            self.client_socket.sendall(f"SESSION_TOKEN:{self.session_token}".encode('utf-8'))
-            print(f"[INFO] [ChatClient] Token de sessão enviado para o servidor de chat: {self.session_token[:50]}...")
-
-            token_response = self.client_socket.recv(1024).decode('utf-8').strip()
-            if token_response == "TOKEN_ACCEPTED":
-                print("[INFO] [ChatClient] Token de sessão aceito pelo servidor de chat.")
-            elif token_response == "INVALID_SESSION_TOKEN":
-                raise Exception("Servidor de chat recusou o token de sessão. Autentique-se novamente.")
-            else:
-                raise Exception(f"Resposta inesperada do servidor de chat sobre o token: '{token_response}'")
-
 
             server_handshake_data_b64 = self.client_socket.recv(4096).decode('utf-8')
             parts = server_handshake_data_b64.split('|')
@@ -191,7 +165,7 @@ class ChatClient:
             encrypted_username_b64 = f"{AESManager.bytes_to_base64(nonce_username)}|{AESManager.bytes_to_base64(ciphertext_username)}|{AESManager.bytes_to_base64(tag_username)}"
             self.client_socket.sendall(encrypted_username_b64.encode('utf-8'))
 
-            self.worker = ChatClientWorker(self.client_socket, self.aes_manager, self.session_token)
+            self.worker = ChatClientWorker(self.client_socket, self.aes_manager)
 
             if self.chat_widget:
                 self.worker.message_received.connect(self.chat_widget.add_message_to_chat)
