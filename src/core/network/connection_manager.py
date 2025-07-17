@@ -153,4 +153,3 @@ def obter_gateway_generico():
     except Exception as e:
         print(f"[ERROR] [ConnectionManager] Erro ao obter IPs locais: {e}")
     return gateways if gateways else None
-

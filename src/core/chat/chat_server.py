@@ -109,11 +109,11 @@ def start_server(chat_widget_instance, port, host_ed25519_private_key: ed25519.E
     except OSError as e:
         print(f"[CRITICAL] [ChatServer] Erro de sistema operacional ao iniciar servidor (bind/listen): {e}. Porta {port} pode estar em uso ou permissão negada.")
         if chat_widget_instance:
-            chat_widget_instance.add_message_to_chat(f"[CRITICAL] Erro ao iniciar servidor: {e}. Porta em uso?")
+            chat_widget_instance.add_message_to_chat(f"[CRITICAL] Erro ao iniciar servidor: A porta pode estar em uso ou permissão negada.") 
     except Exception as e:
         print(f"[CRITICAL] [ChatServer] Erro fatal inesperado no servidor de chat: {e}")
         if chat_widget_instance:
-            chat_widget_instance.add_message_to_chat(f"[CRITICAL] Erro fatal no servidor: {e}")
+            chat_widget_instance.add_message_to_chat(f"[CRITICAL] Erro fatal no servidor. Por favor, reinicie o aplicativo.") 
     finally:
         server_socket.close()
         print("[INFO] [ChatServer] Servidor de chat encerrado.")
@@ -125,4 +125,3 @@ def stop_chat_server():
         print("[INFO] [ChatServer] Sinal para encerrar servidor de chat enviado.")
     else:
         print("[INFO] [ChatServer] Servidor de chat já está parado ou não foi iniciado.")
-

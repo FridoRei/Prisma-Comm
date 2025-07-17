@@ -42,12 +42,12 @@ class ChatClientWorker(QObject):
                 parts = encrypted_message_b64.split('|')
                 if len(parts) != 3:
                     if encrypted_message_b64 == "AUTH_REQUIRED":
-                        self.specific_error.emit("[ERROR] Conexão recusada: Autenticação necessária. Por favor, autentique-se primeiro.")
+                        self.specific_error.emit("Conexão recusada: Autenticação necessária. Por favor, autentique-se primeiro.") 
                         print("[WARNING] [ChatClientWorker] Servidor exigiu autenticação.")
                         self.disconnected.emit()
                         break
                     elif encrypted_message_b64 == "ECC_HANDSHAKE_FAILURE":
-                        self.specific_error.emit("[ERROR] Handshake de criptografia falhou com o servidor.")
+                        self.specific_error.emit("Erro de segurança: Handshake de criptografia falhou com o servidor.") 
                         print("[ERROR] [ChatClientWorker] Handshake ECC falhou com o servidor.")
                         self.disconnected.emit()
                         break
@@ -64,24 +64,24 @@ class ChatClientWorker(QObject):
                     message = self.aes_manager.decrypt(nonce, ciphertext, tag)
                     self.message_received.emit(message)
                 except Exception as e:
-                    self.connection_error.emit(f"[ERROR] ERRO ao descriptografar mensagem. Possível chave incorreta ou mensagem corrompida.")
+                    self.connection_error.emit("Erro ao descriptografar mensagem. A mensagem pode estar corrompida ou a chave incorreta.") 
                     print(f"[ERROR] [ChatClientWorker] ERRO ao descriptografar mensagem: {e}. Conteúdo: {encrypted_message_b64[:100]}...")
 
             except socket.timeout:
                 continue
             except ConnectionResetError:
-                self.message_received.emit("[ERROR] Conexão reiniciada pelo servidor. Desconectado.")
+                self.message_received.emit("Conexão reiniciada pelo servidor. Você foi desconectado.") 
                 print("[ERROR] [ChatClientWorker] Conexão reiniciada pelo servidor.")
                 self.disconnected.emit()
                 break
             except UnicodeDecodeError:
-                self.connection_error.emit("[ERROR] Erro de decodificação de caracteres na mensagem recebida.")
+                self.connection_error.emit("Erro de comunicação: Dados inválidos recebidos.") 
                 print(f"[ERROR] [ChatClientWorker] Erro de decodificação Unicode na mensagem recebida. Dados brutos: {self.client_socket.recv(8192, socket.MSG_PEEK).hex()}")
                 self.disconnected.emit()
                 break
             except Exception as e:
                 if self._running:
-                    self.connection_error.emit(f"[ERROR] Erro de conexão inesperado. Por favor, reconecte.")
+                    self.connection_error.emit("Erro de conexão inesperado. Por favor, reconecte.") 
                     print(f"[CRITICAL] [ChatClientWorker] Erro inesperado na thread de escuta: {e}")
                 self.disconnected.emit()
                 break
@@ -132,7 +132,7 @@ class ChatClient:
             server_handshake_data_b64 = self.client_socket.recv(4096).decode('utf-8')
             parts = server_handshake_data_b64.split('|')
             if len(parts) != 2:
-                raise ValueError(f"Formato de handshake do servidor inválido. Partes esperadas: 2, recebidas: {len(parts)}. Dados: {server_handshake_data_b64[:100]}...")
+                raise ValueError(f"Formato de handshake do servidor inválido. Dados recebidos podem estar corrompidos.") 
 
             server_x25519_public_b64 = parts[0]
             server_signature_b64 = parts[1]
@@ -141,10 +141,10 @@ class ChatClient:
             server_signature_bytes = AESManager.base64_to_bytes(server_signature_b64)
 
             if not self.client_ed25519_public_key_bytes:
-                raise Exception("Nenhuma chave pública Ed25519 do cliente fornecida para verificar a assinatura do servidor. Autenticação do servidor falhou.")
+                raise Exception("Erro de segurança: Chave pública do cliente ausente para verificar o servidor.") 
 
             if not ECCManager.verify_signature(self.client_ed25519_public_key_bytes, server_x25519_public_bytes, server_signature_bytes):
-                raise Exception("Falha na verificação da assinatura da chave X25519 do servidor. A chave do servidor pode ser inválida ou ter sido adulterada.")
+                raise Exception("Erro de segurança: Falha na verificação da autenticidade do servidor. A conexão pode não ser segura.") 
 
             self.ecc_manager.generate_x25519_keys()
             client_x25519_public_bytes = self.ecc_manager.get_x25519_public_key_bytes()
@@ -160,16 +160,16 @@ class ChatClient:
             encrypted_handshake_response_b64 = self.client_socket.recv(1024).decode('utf-8')
             encrypted_parts = encrypted_handshake_response_b64.split('|')
             if len(encrypted_parts) != 3:
-                raise Exception(f"Formato de resposta de handshake ECC inválido. Esperado: 3 partes criptografadas. Recebido: '{encrypted_handshake_response_b64}'")
+                raise Exception(f"Erro de comunicação: Formato de resposta de segurança inválido.") 
             try:
                 nonce = AESManager.base64_to_bytes(encrypted_parts[0])
                 ciphertext = AESManager.base64_to_bytes(encrypted_parts[1])
                 tag = AESManager.base64_to_bytes(encrypted_parts[2])
                 handshake_response = self.aes_manager.decrypt(nonce, ciphertext, tag)
             except Exception as e:
-                raise Exception(f"Falha ao descriptografar resposta de handshake ECC: {e}. Dados: {encrypted_handshake_response_b64[:100]}...")
+                raise Exception(f"Erro de segurança: Falha ao descriptografar resposta do servidor.")             
             if handshake_response != "ECC_HANDSHAKE_SUCCESS":
-                raise Exception(f"Handshake ECC falhou. Resposta descriptografada inesperada: '{handshake_response}'")
+                raise Exception(f"Erro de segurança: Handshake de criptografia falhou.")
 
             nonce_username, ciphertext_username, tag_username = self.aes_manager.encrypt(self.nome_usuario)
             encrypted_username_b64 = f"{AESManager.bytes_to_base64(nonce_username)}|{AESManager.bytes_to_base64(ciphertext_username)}|{AESManager.bytes_to_base64(tag_username)}"
@@ -188,19 +188,19 @@ class ChatClient:
         except socket.timeout:
             print(f"[ERROR] [ChatClient] Timeout ao tentar conectar ou durante o handshake com {self.host}:{self.port}.")
             if self.chat_widget:
-                self.chat_widget.add_message_to_chat(f"[ERROR] Erro de conexão: Timeout. O servidor não respondeu.")
+                self.chat_widget.add_message_to_chat(f"[ERROR] Erro de conexão: O servidor não respondeu a tempo.") 
         except ConnectionRefusedError:
             print(f"[ERROR] [ChatClient] Conexão recusada por {self.host}:{self.port}. Verifique se o servidor está ativo e as portas corretas.")
             if self.chat_widget:
-                self.chat_widget.add_message_to_chat(f"[ERROR] Erro de conexão: Conexão recusada. Servidor pode estar offline.")
+                self.chat_widget.add_message_to_chat(f"[ERROR] Erro de conexão: Conexão recusada. O servidor pode estar offline ou inacessível.") 
         except ValueError as e:
             print(f"[ERROR] [ChatClient] Erro de formato de dados durante o handshake: {e}")
             if self.chat_widget:
-                self.chat_widget.add_message_to_chat(f"[ERROR] Erro de comunicação: Dados inválidos recebidos do servidor.")
+                self.chat_widget.add_message_to_chat(f"[ERROR] Erro de comunicação: Dados inválidos recebidos do servidor.") 
         except Exception as e:
             print(f"[CRITICAL] [ChatClient] Erro inesperado ao estabelecer conexão ou handshake: {e}")
             if self.chat_widget:
-                self.chat_widget.add_message_to_chat(f"[CRITICAL] Erro fatal ao conectar: {e}. Tente novamente.")
+                self.chat_widget.add_message_to_chat(f"[CRITICAL] Erro fatal ao conectar: {e}. Tente novamente.") 
 
             if self.worker:
                 self.worker.disconnected.emit()
@@ -229,11 +229,11 @@ class ChatClient:
         except BrokenPipeError:
             print(f"[ERROR] [ChatClient] Conexão quebrada ao tentar enviar mensagem. Servidor pode ter desconectado.")
             if self.chat_widget:
-                self.chat_widget.add_message_to_chat(f"[ERROR] Erro ao enviar: Conexão perdida com o servidor.")
+                self.chat_widget.add_message_to_chat(f"[ERROR] Erro ao enviar: Conexão perdida com o servidor.") 
         except Exception as e:
             print(f"[ERROR] [ChatClient] Erro ao enviar mensagem: {e}")
             if self.chat_widget:
-                self.chat_widget.add_message_to_chat(f"[ERROR] Erro ao enviar: {e}")
+                self.chat_widget.add_message_to_chat(f"[ERROR] Erro ao enviar: {e}") 
             raise
 
     def disconnect(self):
@@ -263,4 +263,3 @@ class ChatClient:
                 self.worker.disconnected.emit()
             else:
                 pass        
-

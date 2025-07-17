@@ -22,11 +22,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.ui = MainWindowUI()
-<<<<<<< HEAD
-        self.ui.setup_ui(self)
-=======
         self.ed25519_channel_widgets = self.ui.setup_ui(self)
->>>>>>> Dev
 
         self.setMinimumSize(800, 400)
 
@@ -82,12 +78,6 @@ class MainWindow(QMainWindow):
         self.show_home_page()
 
     def handle_error(self, title, message):
-<<<<<<< HEAD
-        if self.app_service:
-            self.app_service.show_error(title, message)
-        else:
-            print(f"Erro: {title} - {message}")
-=======
         print(f"[ERROR] [MainWindow] Erro: {title} - {message}")
 
     @Slot(str)
@@ -95,7 +85,6 @@ class MainWindow(QMainWindow):
         self.show_dialog("Erro no Chat", message)
         print(f"[ERROR] [MainWindow] Erro específico do chat: {message}")
         self.on_chat_disconnected()
->>>>>>> Dev
 
     def set_original_streams(self, stdout, stderr):
         self.original_stdout = stdout

@@ -18,7 +18,7 @@ def handle_public_key_request(conn: socket.socket, addr: tuple, dos_detector: Do
     client_ip = addr[0]
     if not dos_detector.check_and_record(client_ip):
         print(f"[WARNING] [AuthServer] Requisição de chave pública de {addr} bloqueada por DoSDetector.")
-        conn.sendall(b"REFUSED\n")
+        conn.sendall(b"REFUSED\n") 
         conn.close()
         return
 
@@ -51,7 +51,7 @@ def handle_public_key_request(conn: socket.socket, addr: tuple, dos_detector: Do
                     "timestamp": datetime.datetime.now()
                 }
         else:
-            conn.sendall(b"ERROR: Public key not available")
+            conn.sendall(b"ERROR: Internal server error. Please try again.")  
             print(f"[ERROR] [AuthServer] Erro: Chave pública RSA não disponível para {addr} após geração.")
     except Exception as e:
         print(f"[ERROR] [AuthServer] Erro ao enviar chave pública para {addr}: {e}")
@@ -108,7 +108,7 @@ def run_auth_server(auth_port: int, stop_event: threading.Event, host_password: 
 
                 if request_limiter.is_request_too_large(encrypted_password_hash_from_client):
                     print(f"[WARNING] [AuthServer] Requisição UDP de {addr} excedeu o limite de tamanho. Descartando.")
-                    udp_server_socket.sendto(b"REQUEST_TOO_LARGE", addr)
+                    udp_server_socket.sendto(b"REQUEST_TOO_LARGE", addr)  
                     with temp_rsa_managers_lock:
                         if client_ip in temp_rsa_managers:
                             temp_rsa_managers[client_ip]["manager"].clear_keys()
@@ -130,7 +130,7 @@ def run_auth_server(auth_port: int, stop_event: threading.Event, host_password: 
 
                 if not current_rsa_manager_data:
                     print(f"[WARNING] [AuthServer] Nenhuma chave RSA temporária encontrada para {client_ip} (ou expirou). Autenticação falhou.")
-                    udp_server_socket.sendto(b"AUTH_FAILURE", addr)
+                    udp_server_socket.sendto(b"AUTH_FAILURE", addr) 
                     continue
 
                 current_rsa_manager = current_rsa_manager_data["manager"]
@@ -141,7 +141,7 @@ def run_auth_server(auth_port: int, stop_event: threading.Event, host_password: 
                         authenticated_ips[client_ip] = datetime.datetime.now()
                         print(f"[SUCCESS] [AuthServer] Autenticação BEM-SUCEDIDA para {client_ip}.")
                     else:
-                        udp_server_socket.sendto(b"AUTH_FAILURE", addr)
+                        udp_server_socket.sendto(b"AUTH_FAILURE", addr) 
                         print(f"[WARNING] [AuthServer] Autenticação FALHOU para {client_ip} (senha incorreta).")
                 except Exception as e:
                     print(f"[ERROR] [AuthServer] Erro ao descriptografar/verificar senha de {client_ip}: {e}. Dados recebidos podem estar corrompidos.")
@@ -159,7 +159,7 @@ def run_auth_server(auth_port: int, stop_event: threading.Event, host_password: 
                 if 'client_ip' in locals() and client_ip in temp_rsa_managers:
                     with temp_rsa_managers_lock:
                         temp_rsa_managers[client_ip]["manager"].clear_keys()
-                        del temp_rsa_managers[client_ip]
+                        del temp_rsa_managers[client_ip]              
                 break
 
     finally:
@@ -172,5 +172,3 @@ def run_auth_server(auth_port: int, stop_event: threading.Event, host_password: 
             tcp_server_socket.close()
             print("[INFO] [AuthServer] Socket TCP do servidor de autenticação fechado.")
         print("[INFO] [AuthServer] Servidor de autenticação encerrado.")
-
-

@@ -49,8 +49,7 @@ class AppService:
         try:
             self.auth_service.start_server(host_password, self.host_udp_operation_timeout)
         except Exception as e:
-            self.show_error("Erro ao Iniciar Servidor", f"Não foi possível iniciar o servidor de autenticação: {e}")
-            print(f"[CRITICAL] [AppService] Falha ao iniciar servidor de autenticação: {e}")
+            self.show_error("Erro ao Iniciar Servidor", "Não foi possível iniciar o servidor de autenticação. Verifique as configurações e tente novamente.") 
             return
 
         self.main_window.setup_chat_widget(is_host=True)
@@ -95,7 +94,7 @@ class AppService:
                 print(f"[INFO] [AppService] Usando IP fornecido: {server_ip_to_use}")
 
             if not server_ip_to_use or not self.server_ip_to_validate(server_ip_to_use):
-                self.show_error("Erro de IP", "Endereço IP do servidor inválido ou não encontrado.")
+                self.show_error("Erro de Conexão", "Endereço IP do servidor inválido ou não encontrado.")
                 print(f"[ERROR] [AppService] Endereço IP inválido ou não encontrado: {server_ip_to_use}")
                 return
 
@@ -103,7 +102,7 @@ class AppService:
             if authentication_successful: 
                 self.join_hotspot_chat(server_ip_to_use, username, client_ed25519_public_key_bytes) 
             else:
-                self.show_error("Falha na Autenticação", f"Não foi possível autenticar com {server_ip_to_use}. Verifique a senha e o IP.")
+                self.show_error("Falha na Autenticação", "Não foi possível autenticar com o host. Verifique a senha e o IP e tente novamente.")  
                 print(f"[ERROR] [AppService] Falha na autenticação com {server_ip_to_use}.")
         else:
             self.show_dialog("Aviso", "Operação de junção à rede cancelada.")
@@ -147,7 +146,7 @@ class AppService:
             self.is_connected_to_chat = True
             self.main_window.show_chat_page()
         else:
-            self.show_error("Erro de Conexão", "Não foi possível conectar ao servidor de chat. Verifique se o host está ativo e as portas estão corretas.")
+            self.show_error("Erro de Conexão", "Não foi possível conectar ao servidor de chat. Verifique se o host está ativo e as portas estão corretas.")  
             self.is_connected_to_chat = False
             self.main_window.show_home_page()
             print("[ERROR] [AppService] Falha ao conectar ao chat. Conexão não estabelecida.")
@@ -229,4 +228,3 @@ class AppService:
                     del temp_rsa_managers[ip]
         with connected_users_lock:
             connected_users.clear()
-

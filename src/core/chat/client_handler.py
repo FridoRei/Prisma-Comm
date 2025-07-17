@@ -7,6 +7,7 @@ from src.core.crypto.aes_manager import AESManager
 from cryptography.hazmat.primitives.asymmetric import ed25519
 from src.core.network.dos_detector import DoSDetector
 from src.core.network.request_limiter import RequestLimiter
+import html 
 
 CHAT_MESSAGE_MAX_LENGTH = 600
 
@@ -16,6 +17,12 @@ def is_utf8_valid(data: bytes) -> bool:
         return True
     except UnicodeDecodeError:
         return False
+
+def sanitize_chat_message(message: str) -> str:
+    """
+    Escapa caracteres HTML especiais para prevenir injeção de conteúdo.
+    """
+    return html.escape(message)
 
 class ClientHandler(QObject):
 
@@ -70,7 +77,7 @@ class ClientHandler(QObject):
                 server_x25519_public_bytes = self.ecc_manager.get_x25519_public_key_bytes()
 
                 if not self.ecc_manager.has_ed25519_private_key():
-                    raise Exception("Chave privada Ed25519 do host não carregada para assinar a chave X25519. Handshake ECC não pode ser seguro.")
+                    raise Exception("Erro de segurança: Chave de assinatura do servidor ausente.")
 
                 signature = self.ecc_manager.sign_data(server_x25519_public_bytes)
 
@@ -121,19 +128,19 @@ class ClientHandler(QObject):
                 self.client_status_for_host.emit(f"[SUCCESS] Handshake ECC concluído com {self.addr[0]}.")
 
             except socket.timeout:
-                self.client_status_for_host.emit(f"[ERROR] Timeout durante o handshake ECC com {self.addr[0]}.")
+                self.client_status_for_host.emit(f"[ERROR] Timeout durante o handshake de segurança com {self.addr[0]}.")
                 print(f"[ERROR] [ClientHandler] Timeout durante o handshake ECC com {self.addr[0]}.")
                 self.client_socket.sendall(b"ECC_HANDSHAKE_FAILURE")
                 self.client_socket.close()
                 return
             except ValueError as e:
-                self.client_status_for_host.emit(f"[ERROR] Erro de formato de dados durante o handshake ECC com {self.addr[0]}.")
+                self.client_status_for_host.emit(f"[ERROR] Erro de formato de dados durante o handshake de segurança com {self.addr[0]}.")
                 print(f"[ERROR] [ClientHandler] Erro de formato de dados durante o handshake ECC com {self.addr[0]}: {e}")
                 self.client_socket.sendall(b"ECC_HANDSHAKE_FAILURE")
                 self.client_socket.close()
                 return
             except Exception as e:
-                self.client_status_for_host.emit(f"[ERROR] Falha no handshake ECC com {self.addr[0]}.")
+                self.client_status_for_host.emit(f"[ERROR] Falha no handshake de segurança com {self.addr[0]}.") 
                 print(f"[ERROR] [ClientHandler] Falha no handshake ECC com {self.addr[0]}: {e}")
                 self.client_socket.sendall(b"ECC_HANDSHAKE_FAILURE")
                 self.client_socket.close()
@@ -166,10 +173,10 @@ class ClientHandler(QObject):
 
                     try:
                         decrypted_username = self.aes_manager.decrypt(nonce, ciphertext, tag)
-                        self.username = decrypted_username
+                        self.username = sanitize_chat_message(decrypted_username)  
                         self.client_status_for_host.emit(f"[INFO] Cliente '{self.username}' ({self.addr[0]}) conectado.")
                     except Exception as e:
-                        self.client_status_for_host.emit(f"[ERROR] Erro ao descriptografar nome de usuário de {self.addr[0]}. Conexão encerrada.")
+                        self.client_status_for_host.emit(f"[ERROR] Erro ao processar nome de usuário de {self.addr[0]}. Conexão encerrada.")
                         print(f"[ERROR] [ClientHandler] ERRO ao descriptografar nome de usuário de {self.addr[0]}: {e}")
                         self.client_socket.close()
                         return
@@ -223,10 +230,11 @@ class ClientHandler(QObject):
 
                         try:
                             mensagem_descriptografada = self.aes_manager.decrypt(nonce, ciphertext, tag)
-                            self.new_message_for_host.emit(f"{self.username}: {mensagem_descriptografada}")
-                            self.broadcast_message(f"{self.username}: {mensagem_descriptografada}", self.client_socket)
+                            sanitized_message = sanitize_chat_message(mensagem_descriptografada)  
+                            self.new_message_for_host.emit(f"{self.username}: {sanitized_message}")
+                            self.broadcast_message(f"{self.username}: {sanitized_message}", self.client_socket)
                         except Exception as e:
-                            self.new_message_for_host.emit(f"[ERROR] Erro ao descriptografar mensagem de {self.username} ({self.addr[0]}).")
+                            self.new_message_for_host.emit(f"[ERROR] Erro ao processar mensagem de {self.username} ({self.addr[0]}).")
                             print(f"[ERROR] [ClientHandler] ERRO ao descriptografar mensagem de {self.username} ({self.addr[0]}): {e}. Dados: {encrypted_message_b64[:100]}...")
                     else:
                         self.new_message_for_host.emit(f"[WARNING] Formato de mensagem inválido de {self.username} ({self.addr[0]}).")
@@ -240,7 +248,7 @@ class ClientHandler(QObject):
                     break
                 except Exception as e:
                     if self._running:
-                        print(f"[CRITICAL] [ClientHandler] Erro inesperado com cliente {self.username} ({self.addr[0]}): {e}")
+                        print(f"[CRITICAL] [ClientHandler] Erro inesperado com cliente {self.username} ({self.addr[0]}).") 
                         self.new_message_for_host.emit(f"[ERROR] Erro inesperado com cliente {self.username} ({self.addr[0]}).")
                     break
 
@@ -307,4 +315,3 @@ class ClientHandler(QObject):
                     handler.stop()
                 except Exception as e:
                     print(f"[ERROR] [ClientHandler] Erro no broadcast criptografado para {handler.username} ({handler.addr[0]}): {e}")
-
