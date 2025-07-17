@@ -8,7 +8,7 @@ class RSAManager:
         self._public_key = None  
 
     def generate_temp_keys(self):
-        key = RSA.generate(2048)
+        key = RSA.generate(4096)
         self._private_key = key
         self._public_key = key.publickey()
 

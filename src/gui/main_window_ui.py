@@ -17,7 +17,7 @@ client_ico = os.path.join(icons_dir, 'client.ico')
 
 class MainWindowUI:
     def setup_ui(self, parent):
-        parent.setWindowTitle("Conexão Segura")
+        parent.setWindowTitle("Prisma Comm")
         parent.resize(800, 400)
 
         parent.central_widget = QWidget()
@@ -30,9 +30,9 @@ class MainWindowUI:
 
         sidebar_button_style = """
             QPushButton {
-                background-color: #2e2e2f; /* Cor de fundo para os botões */
-                border: 2px solid #555; /* Borda */
-                border-radius: 20px; /* Metade do tamanho fixo (40/2) para ser circular */
+                background-color: #2e2e2f; 
+                border: 2px solid #555;
+                border-radius: 20px;
                 color: white;
             }
             QPushButton:hover {
@@ -49,7 +49,7 @@ class MainWindowUI:
         parent.btn_home.setFixedSize(40, 40)
         parent.btn_home.setCursor(Qt.CursorShape.PointingHandCursor)
         parent.btn_home.setToolTip("Início")
-        parent.btn_home.setStyleSheet(sidebar_button_style) 
+        parent.btn_home.setStyleSheet(sidebar_button_style)
         sidebar_layout.addWidget(parent.btn_home)
 
         parent.btn_settings = QPushButton("")
@@ -58,25 +58,25 @@ class MainWindowUI:
         parent.btn_settings.setFixedSize(40, 40)
         parent.btn_settings.setCursor(Qt.CursorShape.PointingHandCursor)
         parent.btn_settings.setToolTip("Configurações")
-        parent.btn_settings.setStyleSheet(sidebar_button_style) 
+        parent.btn_settings.setStyleSheet(sidebar_button_style)
         sidebar_layout.addWidget(parent.btn_settings)
 
         parent.btn_chat = QPushButton("")
-        parent.btn_chat.setIcon(QIcon(chat_ico)) 
+        parent.btn_chat.setIcon(QIcon(chat_ico))
         parent.btn_chat.setIconSize(QSize(20, 20))
         parent.btn_chat.setFixedSize(40, 40)
         parent.btn_chat.setCursor(Qt.CursorShape.PointingHandCursor)
         parent.btn_chat.setToolTip("Chat")
-        parent.btn_chat.setStyleSheet(sidebar_button_style) 
+        parent.btn_chat.setStyleSheet(sidebar_button_style)
         sidebar_layout.addWidget(parent.btn_chat)
 
         parent.btn_logs = QPushButton("")
-        parent.btn_logs.setIcon(QIcon(logs_ico)) 
+        parent.btn_logs.setIcon(QIcon(logs_ico))
         parent.btn_logs.setIconSize(QSize(20, 20))
         parent.btn_logs.setFixedSize(40, 40)
         parent.btn_logs.setCursor(Qt.CursorShape.PointingHandCursor)
         parent.btn_logs.setToolTip("Logs")
-        parent.btn_logs.setStyleSheet(sidebar_button_style) 
+        parent.btn_logs.setStyleSheet(sidebar_button_style)
         sidebar_layout.addWidget(parent.btn_logs)
 
         sidebar_layout.addStretch()
@@ -102,16 +102,16 @@ class MainWindowUI:
         font = QFont()
         font.setPointSize(18)
         parent.label_home.setFont(font)
-        parent.label_home.setStyleSheet("color: white;") 
+        parent.label_home.setStyleSheet("color: white;")
         home_layout.addWidget(parent.label_home)
 
         buttons_container = QWidget()
         buttons_container_layout = QHBoxLayout(buttons_container)
         buttons_container.setStyleSheet("""
-            background-color: #3e3e3f; /* Cor de fundo do retângulo */
-            border: 1px solid #555; /* Borda */
-            border-radius: 10px; /* Bordas arredondadas */
-            padding: 20px; /* Espaçamento interno */
+            background-color: #3e3e3f; 
+            border: 1px solid #555; 
+            border-radius: 10px;
+            padding: 20px; 
         """)
 
         host_join_button_style = """
@@ -120,7 +120,7 @@ class MainWindowUI:
                 border: none;
                 border-radius: 8px;
                 color: white;
-                font-size: 16px;
+                font-size: 16px; 
                 padding: 10px;
             }
             QPushButton:hover {
@@ -130,20 +130,38 @@ class MainWindowUI:
                 background-color: #444;
             }
         """
-
+        load_key_button_style = """
+            QPushButton {
+                background-color: #555;
+                border: none;
+                border-radius: 5px;
+                color: white;
+                font-size: 10px;
+                padding: 3px 8px;
+                min-width: 60px;
+                min-height: 20px;
+            }
+            QPushButton:hover {
+                background-color: #666;
+            }
+            QPushButton:pressed {
+                background-color: #444;
+            }
+        """        
+        
         parent.btn_host = QPushButton("Hospedar Rede")
         parent.btn_host.setIcon(QIcon(host_ico))
         parent.btn_host.setIconSize(QSize(32, 32))
         parent.btn_host.setFixedSize(200, 80)
         parent.btn_host.setCursor(Qt.CursorShape.PointingHandCursor)
-        parent.btn_host.setStyleSheet(host_join_button_style) 
+        parent.btn_host.setStyleSheet(host_join_button_style)
 
         parent.btn_join = QPushButton("Juntar-se à Rede")
         parent.btn_join.setIcon(QIcon(client_ico))
         parent.btn_join.setIconSize(QSize(32, 32))
         parent.btn_join.setFixedSize(200, 80)
         parent.btn_join.setCursor(Qt.CursorShape.PointingHandCursor)
-        parent.btn_join.setStyleSheet(host_join_button_style) 
+        parent.btn_join.setStyleSheet(host_join_button_style)
 
         buttons_container_layout.addStretch()
         buttons_container_layout.addWidget(parent.btn_host)
@@ -172,18 +190,18 @@ class MainWindowUI:
         parent.top_settings_container = QWidget()
         top_settings_layout = QHBoxLayout(parent.top_settings_container)
         parent.top_settings_container.setStyleSheet("""
-            background-color: #4e4e4f; /* Cor de fundo do retângulo */
-            border: 1px solid #666; /* Borda */
-            border-radius: 8px; /* Bordas arredondadas */
-            padding: 10px; /* Espaçamento interno */
+            background-color: #4e4e4f; 
+            border: 1px solid #666; 
+            border-radius: 8px; 
+            padding: 10px;
         """)
 
         username_group_layout = QVBoxLayout()
-        username_group_layout.setAlignment(Qt.AlignTop | Qt.AlignLeft) 
+        username_group_layout.setAlignment(Qt.AlignTop | Qt.AlignLeft)
         username_group_layout.addWidget(QLabel("Nome de Usuário:"))
         parent.username_entry = QLineEdit()
         parent.username_entry.setPlaceholderText("Digite seu nome (padrão: Usuário)")
-        parent.username_entry.setFixedWidth(200)  
+        parent.username_entry.setFixedWidth(200)
         parent.username_entry.setStyleSheet("""
             QLineEdit {
                 background-color: #3e3e3f;
@@ -194,18 +212,18 @@ class MainWindowUI:
             }
         """)
         username_group_layout.addWidget(parent.username_entry)
-        username_group_layout.addStretch() 
+        username_group_layout.addStretch()
 
         top_settings_layout.addLayout(username_group_layout)
-        top_settings_layout.addSpacing(20) 
+        top_settings_layout.addSpacing(20)
 
         ports_group_layout = QVBoxLayout()
-        ports_group_layout.setAlignment(Qt.AlignTop | Qt.AlignLeft) 
-        
+        ports_group_layout.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+
         ports_group_layout.addWidget(QLabel("Porta de Autenticação:"))
         parent.auth_port_entry = QLineEdit()
         parent.auth_port_entry.setPlaceholderText("Ex: 20556")
-        parent.auth_port_entry.setFixedWidth(100)  
+        parent.auth_port_entry.setFixedWidth(100)
         parent.auth_port_entry.setStyleSheet("""
             QLineEdit {
                 background-color: #3e3e3f;
@@ -220,7 +238,7 @@ class MainWindowUI:
         ports_group_layout.addWidget(QLabel("Porta de Comunicação:"))
         parent.comm_port_entry = QLineEdit()
         parent.comm_port_entry.setPlaceholderText("Ex: 20557")
-        parent.comm_port_entry.setFixedWidth(100)  
+        parent.comm_port_entry.setFixedWidth(100)
         parent.comm_port_entry.setStyleSheet("""
             QLineEdit {
                 background-color: #3e3e3f;
@@ -231,13 +249,99 @@ class MainWindowUI:
             }
         """)
         ports_group_layout.addWidget(parent.comm_port_entry)
-        ports_group_layout.addStretch() 
-
+        ports_group_layout.addStretch()
         top_settings_layout.addLayout(ports_group_layout)
-        top_settings_layout.addStretch() 
+                
+        parent.btn_advanced_timeout_options = QPushButton("Opções Avançadas de Timeout")
+        parent.btn_advanced_timeout_options.setStyleSheet(host_join_button_style) 
+        parent.btn_advanced_timeout_options.setCursor(Qt.CursorShape.PointingHandCursor)
+        top_settings_layout.addWidget(parent.btn_advanced_timeout_options)
+        top_settings_layout.addStretch()        
+        ports_group_layout.addStretch()
+        
+        top_settings_layout.addStretch()
 
         settings_layout.addWidget(parent.top_settings_container)
-        settings_layout.addStretch() 
+
+        parent.ed25519_keys_container = QWidget()
+        ed25519_keys_layout = QVBoxLayout(parent.ed25519_keys_container)
+        parent.ed25519_keys_container.setStyleSheet("""
+            background-color: #4e4e4f;
+            border: 1px solid #666;
+            border-radius: 8px;
+            padding: 10px;
+            margin-top: 10px;
+        """)
+
+        ed25519_keys_layout.addWidget(QLabel("<b>Chaves Ed25519 para Assinatura (Chat):</b>"))
+
+        channel_widgets_to_return = {}
+
+        from src.config.settings import ED25519_CHANNELS 
+
+        for channel_name in ED25519_CHANNELS:
+            channel_group_box = QWidget()
+            channel_group_layout = QVBoxLayout(channel_group_box)
+            channel_group_layout.setContentsMargins(0, 0, 0, 0) 
+            channel_group_box.setStyleSheet("border: none;") 
+
+            channel_label = QLabel(f"<b>Canal {channel_name.capitalize()}:</b>")
+            channel_label.setStyleSheet("color: white; margin-top: 3px;")
+            channel_group_layout.addWidget(channel_label)
+
+            private_key_layout = QHBoxLayout()
+            private_key_label = QLabel("Privada:")
+            private_key_label.setStyleSheet("color: white; margin-top: 3px;") 
+            private_key_layout.addWidget(private_key_label)
+            private_key_path_entry = QLineEdit()
+            private_key_path_entry.setReadOnly(True)
+            private_key_path_entry.setStyleSheet("""
+                QLineEdit {
+                    background-color: #3e3e3f;
+                    border: none;
+                    border-radius: 5px;
+                    color: white;
+                    padding: 5px;
+                }
+            """)
+            private_key_layout.addWidget(private_key_path_entry)
+            btn_load_private_key = QPushButton("Carregar")
+            btn_load_private_key.setStyleSheet(load_key_button_style)
+            private_key_layout.addWidget(btn_load_private_key)
+            channel_group_layout.addLayout(private_key_layout)
+
+            public_key_layout = QHBoxLayout()
+            public_key_label = QLabel("Pública:")
+            public_key_label.setStyleSheet("color: white; margin-top: 3px;")
+            public_key_layout.addWidget(public_key_label)
+            public_key_path_entry = QLineEdit()
+            public_key_path_entry.setReadOnly(True)
+            public_key_path_entry.setStyleSheet("""
+                QLineEdit {
+                    background-color: #3e3e3f;
+                    border: none;
+                    border-radius: 5px;
+                    color: white;
+                    padding: 5px;
+                }
+            """)
+            public_key_layout.addWidget(public_key_path_entry)
+            btn_load_public_key = QPushButton("Carregar")
+            btn_load_public_key.setStyleSheet(load_key_button_style)
+            public_key_layout.addWidget(btn_load_public_key)
+            channel_group_layout.addLayout(public_key_layout)
+
+            ed25519_keys_layout.addWidget(channel_group_box)
+
+            channel_widgets_to_return[channel_name] = {
+                "private_path_entry": private_key_path_entry,
+                "public_path_entry": public_key_path_entry,
+                "btn_load_private": btn_load_private_key,
+                "btn_load_public": btn_load_public_key
+            }
+
+        settings_layout.addWidget(parent.ed25519_keys_container)
+        settings_layout.addStretch()
 
         parent.btn_save_settings = QPushButton("Salvar Configurações")
         parent.btn_save_settings.setStyleSheet("""
@@ -265,19 +369,19 @@ class MainWindowUI:
         parent.stacked_widget.addWidget(parent.settings_page)
 
         parent.chat_page = QWidget()
-        parent.chat_layout = QVBoxLayout(parent.chat_page) 
+        parent.chat_layout = QVBoxLayout(parent.chat_page)
 
         parent.no_chat_label = QLabel("Nenhum chat conectado.")
         parent.no_chat_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         font_no_chat = QFont()
         font_no_chat.setPointSize(16)
         parent.no_chat_label.setFont(font_no_chat)
-        parent.no_chat_label.setStyleSheet("color: white;") 
+        parent.no_chat_label.setStyleSheet("color: white;")
         parent.chat_layout.addWidget(parent.no_chat_label)
-        parent.chat_layout.addStretch() 
+        parent.chat_layout.addStretch()
 
         parent.chat_page.setStyleSheet("""
-            background-color: #4e4e4f; /* Cor diferente para o chat */
+            background-color: #4e4e4f;
             border-radius: 15px;
             padding: 10px;
         """)
@@ -293,18 +397,27 @@ class MainWindowUI:
 
         parent.logs_text_edit = QTextEdit()
         parent.logs_text_edit.setReadOnly(True)
+        parent.logs_text_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         parent.logs_text_edit.setStyleSheet("""
-            background-color: #1e1e1f; /* Fundo escuro como terminal */
-            color: #00ff00; /* Texto verde como terminal */
-            font-family: "Monospace";
-            font-size: 10pt;
-            border: none;
-            padding: 5px;
+            QTextEdit { 
+                background-color: #1e1e1f;
+                color: #FFFFFF; 
+                font-family: "Monospace";
+                font-size: 10pt;
+                border: none;
+                padding: 5px;
+            }
+
+            span.DEBUG { color: #A9A9A9; }
+            span.INFO { color: #FFFFFF; } 
+            span.ERROR { color: #FF6347; } 
+            span.WARNING { color: #FFA500; } 
+            span.CRITICAL { color: #DC143C; }           
         """)
         logs_layout.addWidget(parent.logs_text_edit)
 
         parent.logs_page.setStyleSheet("""
-            background-color: #2e2e2f; /* Cor de fundo da página de logs */
+            background-color: #2e2e2f;
             border-radius: 15px;
             padding: 10px;
         """)
@@ -314,3 +427,4 @@ class MainWindowUI:
 
         main_layout.addWidget(sidebar_widget)
 
+        return channel_widgets_to_return
