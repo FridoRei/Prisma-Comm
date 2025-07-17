@@ -138,6 +138,7 @@ def run_auth_server(auth_port: int, stop_event: threading.Event, host_password: 
                 try:
                     decrypted_client_password_hash = current_rsa_manager.decrypt_string(encrypted_password_hash_from_client)
                     if verificar_senha(host_password, decrypted_client_password_hash):
+                        authenticated_ips[client_ip] = datetime.datetime.now()
                         print(f"[SUCCESS] [AuthServer] Autenticação BEM-SUCEDIDA para {client_ip}.")
                     else:
                         udp_server_socket.sendto(b"AUTH_FAILURE", addr)

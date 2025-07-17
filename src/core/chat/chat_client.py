@@ -119,6 +119,21 @@ class ChatClient:
             self.client_socket.connect((self.host, self.port))
             print(f"[SUCCESS] [ChatClient] Conectado ao servidor em {self.host}:{self.port}")
 
+            initial_response = self.client_socket.recv(1024).decode('utf-8').strip()
+            if initial_response == "ACCEPTED":
+                print("[INFO] [ChatClient] Servidor de chat aceitou a conexão.")
+            elif initial_response == "AUTH_REQUIRED":
+                raise Exception("Conexão recusada pelo servidor de chat: Autenticação necessária.")
+            elif initial_response == "REFUSED":
+                raise Exception("Conexão recusada pelo servidor de chat (DoS ou já conectado).")
+            else:
+                raise Exception(f"Resposta inicial inesperada do servidor de chat: '{initial_response}'")
+
+            server_handshake_data_b64 = self.client_socket.recv(4096).decode('utf-8')
+            parts = server_handshake_data_b64.split('|')
+            if len(parts) != 2:
+                raise ValueError(f"Formato de handshake do servidor inválido. Partes esperadas: 2, recebidas: {len(parts)}. Dados: {server_handshake_data_b64[:100]}...")
+
             server_x25519_public_b64 = parts[0]
             server_signature_b64 = parts[1]
 

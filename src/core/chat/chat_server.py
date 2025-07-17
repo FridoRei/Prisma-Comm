@@ -92,7 +92,7 @@ def start_server(chat_widget_instance, port, host_ed25519_private_key: ed25519.E
 
                     thread.start()
                 else:
-                    print(f"[WARNING] [ChatServer] Conexão ao chat de {client_ip} rejeitada.")
+                    print(f"[WARNING] [ChatServer] Conexão ao chat de {client_ip} rejeitada por falta de autenticação.")
                     conn.sendall(b"AUTH_REQUIRED\n")
                     conn.close()
 
