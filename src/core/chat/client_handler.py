@@ -1,4 +1,3 @@
-
 import traceback
 import socket
 from PySide6.QtCore import QObject, Signal, Slot
@@ -10,6 +9,7 @@ from src.core.network.dos_detector import DoSDetector
 from src.core.network.request_limiter import RequestLimiter
 import html
 import json
+import hashlib # Importar hashlib
 
 CHAT_MESSAGE_MAX_LENGTH = 600
 FILE_MAX_SIZE = 10 * 1024 * 1024
@@ -32,17 +32,18 @@ class ClientHandler(QObject):
     new_message_for_host = Signal(str)
     client_status_for_host = Signal(str)
     user_list_updated = Signal()
-    file_received_from_client = Signal(str, str, bytes, str, object, object, object, int)
+    # Sinal para arquivos: passa o dicionário JSON completo do arquivo (já descriptografado)
+    file_received_from_client = Signal(dict, object, object, object) # file_data_dict, conn_obj, aes_mgr, dos_det
 
     def __init__(self, client_socket, addr, session_aes_key_bytes: bytes, dos_detector: DoSDetector, host_client_data_receive_timeout: int):
         super().__init__()
         self.client_socket = client_socket
         self.addr = addr
-        self.username = f"[{addr[0]}]"
+        self.username = f"[{addr[0]}]" # Temporário, será atualizado pelo cliente
         self._running = True
         self.client_socket.settimeout(host_client_data_receive_timeout)
         self.aes_manager = AESManager(session_aes_key_bytes)
-        self.ecc_manager = ECCManager()
+        self.ecc_manager = ECCManager() # Pode não ser necessário aqui, mas mantido por consistência
         self.dos_detector = dos_detector
         self.request_limiter = RequestLimiter(max_length=CHAT_MESSAGE_MAX_LENGTH)
 
@@ -66,6 +67,7 @@ class ClientHandler(QObject):
         client_ip = self.addr[0]
 
         try:
+            # Recebe o nome de usuário inicial (agora em JSON criptografado)
             encrypted_username_bytes = self.client_socket.recv(1024)
             if not encrypted_username_bytes:
                 print(f"[WARNING] [ClientHandler] Cliente {self.addr[0]} desconectou antes de enviar o nome de usuário.")
@@ -86,12 +88,26 @@ class ClientHandler(QObject):
                 tag = AESManager.base64_to_bytes(parts[2])
 
                 try:
-                    decrypted_username = self.aes_manager.decrypt(nonce, ciphertext, tag)
-                    self.username = sanitize_chat_message(decrypted_username)
-                    self.new_message_for_host.emit(f"[INFO] Cliente '{self.username}' ({self.addr[0]}) conectado.")
-                except Exception as e:
+                    decrypted_json_str = self.aes_manager.decrypt(nonce, ciphertext, tag)
+                    username_data = json.loads(decrypted_json_str)
+
+                    msg_type = username_data.get("type")
+                    username_content = username_data.get("content")
+                    username_hash = username_data.get("hash")
+
+                    if msg_type == "username_init" and username_content and username_hash:
+                        calculated_hash = hashlib.sha256(username_content.encode('utf-8')).hexdigest()
+                        if calculated_hash != username_hash:
+                            raise ValueError("Hash do nome de usuário inválido.")
+
+                        self.username = sanitize_chat_message(username_content)
+                        self.new_message_for_host.emit(f"[INFO] Cliente '{self.username}' ({self.addr[0]}) conectado.")
+                    else:
+                        raise ValueError("Formato de dados de nome de usuário inicial inválido.")
+
+                except (json.JSONDecodeError, ValueError) as e:
                     self.new_message_for_host.emit(f"[ERROR] Erro ao processar nome de usuário de {self.addr[0]}. Conexão encerrada.")
-                    print(f"[ERROR] [ClientHandler] ERRO ao descriptografar nome de usuário de {self.addr[0]}: {e}")
+                    print(f"[ERROR] [ClientHandler] ERRO ao descriptografar/processar nome de usuário de {self.addr[0]}: {e}")
                     self.client_socket.close()
                     return
             else:
@@ -108,6 +124,7 @@ class ClientHandler(QObject):
 
             while self._running:
                 try:
+                    # Peek para verificar se é um arquivo (primeiros 4 bytes indicam o tamanho total)
                     header_bytes = self.client_socket.recv(4, socket.MSG_PEEK)
                     if not header_bytes:
                         print(f"[INFO] [ClientHandler] Cliente {self.username} ({self.addr[0]}) desconectou (recebeu dados vazios).")
@@ -115,16 +132,17 @@ class ClientHandler(QObject):
 
                     try:
                         data_length = int.from_bytes(header_bytes, 'big')
-                        if data_length > 0 and data_length <= FILE_MAX_SIZE + 4096: 
+                        # Se o tamanho for maior que 0 e dentro de um limite razoável para arquivos
+                        if data_length > 0 and data_length <= FILE_MAX_SIZE + 4096:
+                            # Consome os 4 bytes do cabeçalho de tamanho
                             self.client_socket.recv(4)
-                            self.file_received_from_client.emit(
-                                "", "", b"", self.username, self.client_socket, self.aes_manager, self.dos_detector, data_length
-                            )
+                            self._handle_incoming_file(data_length) # Passa o tamanho total esperado
                             continue
-
                     except ValueError:
+                        # Não é um cabeçalho de tamanho de arquivo, então é uma mensagem de texto normal
                         pass
 
+                    # Se não for um arquivo, tenta receber como mensagem de texto
                     encrypted_message_bytes = self.client_socket.recv(8192)
                     if not encrypted_message_bytes:
                         print(f"[INFO] [ClientHandler] Cliente {self.username} ({self.addr[0]}) desconectou (dados vazios após peek).")
@@ -151,13 +169,34 @@ class ClientHandler(QObject):
                         tag = AESManager.base64_to_bytes(parts[2])
 
                         try:
-                            mensagem_descriptografada = self.aes_manager.decrypt(nonce, ciphertext, tag)
-                            sanitized_message = sanitize_chat_message(mensagem_descriptografada)
-                            self.new_message_for_host.emit(f"{self.username}: {sanitized_message}")
-                            self.broadcast_message(f"{self.username}: {sanitized_message}", self.client_socket)
-                        except Exception as e:
+                            decrypted_json_str = self.aes_manager.decrypt(nonce, ciphertext, tag)
+                            message_data = json.loads(decrypted_json_str)
+
+                            msg_type = message_data.get("type")
+                            msg_content = message_data.get("content")
+                            msg_hash = message_data.get("hash")
+
+                            if msg_type == "text_message" and msg_content and msg_hash:
+                                # Verificar integridade da mensagem de texto
+                                calculated_hash = hashlib.sha256(msg_content.encode('utf-8')).hexdigest()
+                                if calculated_hash != msg_hash:
+                                    print(f"[ERROR] [ClientHandler] Erro de integridade na mensagem de {self.username}. Hash inválido.")
+                                    self.new_message_for_host.emit(f"[ERRO] Falha na integridade da mensagem de {self.username}.")
+                                    continue
+
+                                sanitized_message = sanitize_chat_message(msg_content)
+                                self.new_message_for_host.emit(f"{self.username}: {sanitized_message}")
+
+                                # Adiciona o username ao JSON antes de retransmitir
+                                message_data["sender_username"] = self.username
+                                self.broadcast_message(message_data, self.client_socket)
+                            else:
+                                print(f"[WARNING] [ClientHandler] Formato de mensagem JSON inválido ou tipo desconhecido de {self.username} ({self.addr[0]}): {message_data}")
+                                self.new_message_for_host.emit(f"[ERRO] Mensagem recebida em formato inválido de {self.username}.")
+
+                        except (json.JSONDecodeError, ValueError) as e:
                             self.new_message_for_host.emit(f"[ERROR] Erro ao processar mensagem de {self.username} ({self.addr[0]}).")
-                            print(f"[ERROR] [ClientHandler] ERRO ao descriptografar mensagem de {self.username} ({self.addr[0]}): {e}. Dados: {encrypted_message_b64[:100]}...")
+                            print(f"[ERROR] [ClientHandler] ERRO ao descriptografar/processar mensagem de {self.username} ({self.addr[0]}): {e}. Dados: {encrypted_message_b64[:100]}...")
                     else:
                         self.new_message_for_host.emit(f"[WARNING] Formato de mensagem inválido de {self.username} ({self.addr[0]}).")
                         print(f"[WARNING] [ClientHandler] Formato de mensagem inválido de {self.username} ({self.addr[0]}). Dados: {encrypted_message_b64[:100]}...")
@@ -196,11 +235,68 @@ class ClientHandler(QObject):
                 print(f"[ERROR] [ClientHandler] Erro ao fechar socket no bloco finally para {self.username} ({self.addr[0]}): {e}")
             self.client_status_for_host.emit(f"[INFO] Cliente '{self.username}' ({self.addr[0]}) desconectado.")
 
+    def _handle_incoming_file(self, total_data_length: int):
+        try:
+            # total_data_length já foi lido e consumido do socket
+            # Agora, leia o restante dos dados criptografados
+            encrypted_full_data = b''
+            bytes_received = 0
+            while bytes_received < total_data_length:
+                chunk = self.client_socket.recv(min(total_data_length - bytes_received, 4096))
+                if not chunk:
+                    print(f"[WARNING] [ClientHandler] Cliente {self.username} ({self.addr[0]}) desconectou durante o recebimento do arquivo.")
+                    return
+                encrypted_full_data += chunk
+                bytes_received += len(chunk)
 
-    def send_to_client(self, message: str):
+            parts = encrypted_full_data.split(b'|', 2)
+            if len(parts) != 3:
+                raise ValueError("Formato de dados de arquivo criptografado inválido.")
+
+            nonce = parts[0]
+            ciphertext = parts[1]
+            tag = parts[2]
+
+            decrypted_data_json_str = self.aes_manager.decrypt(nonce, ciphertext, tag)
+            file_data = json.loads(decrypted_data_json_str)
+
+            msg_type = file_data.get("type")
+            original_filename = file_data.get("filename")
+            mime_type = file_data.get("mime_type")
+            file_content_b64 = file_data.get("content")
+            received_hash = file_data.get("hash")
+
+            if msg_type != "archive" or not all([original_filename, mime_type, file_content_b64, received_hash]):
+                raise ValueError("Dados de arquivo incompletos, corrompidos ou tipo inválido.")
+
+            file_content_bytes = AESManager.base64_to_bytes(file_content_b64)
+
+            calculated_hash = hashlib.sha256(file_content_bytes).hexdigest()
+            if calculated_hash != received_hash:
+                print(f"[ERROR] [ClientHandler] Erro de integridade no arquivo '{original_filename}' de {self.username}. Hash inválido.")
+                self.new_message_for_host.emit(f"[ERRO] Falha na integridade do arquivo '{original_filename}' de {self.username}.")
+                return
+
+            print(f"[INFO] [ClientHandler] Arquivo '{original_filename}' ({mime_type}) de {self.username} recebido e verificado. Emitindo para retransmissão.")
+
+            # Adiciona o username ao JSON antes de emitir para retransmissão
+            file_data["sender_username"] = self.username
+            # Emite o dicionário JSON completo do arquivo para o chat_server
+            self.file_received_from_client.emit(file_data, self.client_socket, self.aes_manager, self.dos_detector)
+
+        except json.JSONDecodeError:
+            print(f"[ERROR] [ClientHandler] Erro ao decodificar JSON do arquivo recebido de {self.username} ({self.addr[0]}).")
+            self.new_message_for_host.emit(f"[ERRO] Erro ao receber arquivo de {self.username}: Dados corrompidos.")
+        except Exception as e:
+            print(f"[ERROR] [ClientHandler] Erro ao lidar com arquivo recebido de {self.username} ({self.addr[0]}): {e}")
+            self.new_message_for_host.emit(f"[ERRO] Erro ao receber arquivo de {self.username}: {e}")
+
+
+    def send_to_client(self, message_data: dict): # Agora espera um dicionário (JSON)
         try:
             if self._running and self.aes_manager:
-                nonce, ciphertext, tag = self.aes_manager.encrypt(message)
+                json_message_str = json.dumps(message_data) # Converte o dicionário para string JSON
+                nonce, ciphertext, tag = self.aes_manager.encrypt(json_message_str)
                 encrypted_data_b64 = f"{AESManager.bytes_to_base64(nonce)}|{AESManager.bytes_to_base64(ciphertext)}|{AESManager.bytes_to_base64(tag)}"
                 self.client_socket.sendall(encrypted_data_b64.encode('utf-8'))
             elif not self.aes_manager:
@@ -213,7 +309,7 @@ class ClientHandler(QObject):
         except Exception as e:
             print(f"[ERROR] [ClientHandler] Erro ao enviar para {self.username} ({self.addr[0]}): {e}")
 
-    def broadcast_message(self, message: str, sender_socket=None):
+    def broadcast_message(self, message_data: dict, sender_socket=None): # Agora espera um dicionário (JSON)
         with clientes_lock:
             current_handlers = handlers.copy()
 
@@ -228,7 +324,8 @@ class ClientHandler(QObject):
 
                     if dest_aes_key:
                         dest_aes_manager = AESManager(dest_aes_key)
-                        nonce, ciphertext, tag = dest_aes_manager.encrypt(message)
+                        json_message_str = json.dumps(message_data) # Converte o dicionário para string JSON
+                        nonce, ciphertext, tag = dest_aes_manager.encrypt(json_message_str)
                         encrypted_data_b64 = f"{AESManager.bytes_to_base64(nonce)}|{AESManager.bytes_to_base64(ciphertext)}|{AESManager.bytes_to_base64(tag)}"
                         handler.client_socket.sendall(encrypted_data_b64.encode('utf-8'))
                     else:

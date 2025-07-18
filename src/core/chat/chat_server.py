@@ -4,21 +4,27 @@ from src.core.chat.globals import clientes_lock, handlers, connected_users_lock,
 from src.core.chat.client_handler import ClientHandler
 from cryptography.hazmat.primitives.asymmetric import ed25519
 from src.core.network.dos_detector import DoSDetector
-import datetime 
+import datetime
 from src.core.crypto.aes_manager import AESManager
 import os
 import hashlib
 import json
 
 chat_server_running = False
-FILE_MAX_SIZE = 10 * 1024 * 1024 
+FILE_MAX_SIZE = 10 * 1024 * 1024
 
 def broadcast_from_host(message: str, chat_widget_instance):
     if not message:
         print("[WARNING] [ChatServer] Tentativa de broadcast de mensagem vazia.")
         return
 
-    message_with_prefix = f"[Host] {message}"
+    # Encapsula a mensagem do host em JSON
+    message_data = {
+        "type": "text_message",
+        "content": message,
+        "hash": hashlib.sha256(message.encode('utf-8')).hexdigest(),
+        "sender_username": "Host" # O host é o remetente
+    }
 
     with clientes_lock:
         current_handlers = handlers.copy()
@@ -30,82 +36,53 @@ def broadcast_from_host(message: str, chat_widget_instance):
     for handler in current_handlers:
         try:
             if handler._running:
-                handler.send_to_client(message_with_prefix)
+                handler.send_to_client(message_data) # Envia o dicionário JSON
             else:
                 print(f"[WARNING] [ChatServer] Handler para {handler.username} ({handler.addr}) não está rodando, pulando broadcast.")
         except Exception as e:
             print(f"[ERROR] [ChatServer] Erro ao tentar broadcast para {handler.username} ({handler.addr}): {e}")
 
-def handle_file_transfer(conn: socket.socket, addr: tuple, aes_manager: AESManager, dos_detector: DoSDetector, sender_username: str, total_data_length: int):
-    client_ip = addr[0]
-    print(f"[INFO] [ChatServer] Iniciando recebimento de arquivo de {addr} ({sender_username}).")
+# handle_file_transfer agora recebe o dicionário JSON completo do arquivo
+def handle_file_transfer(file_data_dict: dict, sender_conn: socket.socket, aes_manager: AESManager, dos_detector: DoSDetector):
+    client_ip = sender_conn.getpeername()[0] # Obtém o IP do socket remetente
+    sender_username = file_data_dict.get("sender_username", "Desconhecido")
+    original_filename = file_data_dict.get("filename", "arquivo_desconhecido")
+    mime_type = file_data_dict.get("mime_type", "application/octet-stream")
+    received_hash = file_data_dict.get("hash")
+    file_content_b64 = file_data_dict.get("content")
+
+    print(f"[INFO] [ChatServer] Iniciando processamento de arquivo de {client_ip} ({sender_username}).")
 
     if not dos_detector.anti_spam_message(client_ip):
         print(f"[SPAM] Transferência de arquivo de {client_ip} bloqueada por anti-spam.")
         return
 
     try:
-
-        if total_data_length > FILE_MAX_SIZE + 4096:
-            print(f"[WARNING] [ChatServer] Arquivo de {addr} excede o limite de tamanho ({total_data_length} bytes). Descartando.")
-            bytes_to_consume = total_data_length
-            while bytes_to_consume > 0:
-                chunk = conn.recv(min(bytes_to_consume, 4096))
-                if not chunk:
-                    print(f"[WARNING] [ChatServer] Cliente {addr} desconectou durante o descarte do arquivo grande.")
-                    return
-                bytes_to_consume -= len(chunk)
+        # Verifica o tamanho do conteúdo Base64 para estimar o tamanho real do arquivo
+        # Uma estimativa grosseira é que Base64 aumenta o tamanho em ~33%
+        estimated_file_size = len(AESManager.base64_to_bytes(file_content_b64))
+        if estimated_file_size > FILE_MAX_SIZE:
+            print(f"[WARNING] [ChatServer] Arquivo de {client_ip} excede o limite de tamanho ({estimated_file_size} bytes). Descartando.")
             return
 
-        encrypted_full_data = b''
-        bytes_received = 0
-        while bytes_received < total_data_length:
-            chunk = conn.recv(min(total_data_length - bytes_received, 4096))
-            if not chunk:
-                print(f"[WARNING] [ChatServer] Cliente {addr} desconectou durante o recebimento do conteúdo do arquivo.")
-                return
-            encrypted_full_data += chunk
-            bytes_received += len(chunk)
-
-        parts = encrypted_full_data.split(b'|', 2)
-        if len(parts) != 3:
-            raise ValueError("Formato de dados de arquivo criptografado inválido do cliente.")
-
-        nonce = parts[0]
-        ciphertext = parts[1]
-        tag = parts[2]
-
-        decrypted_data_json = aes_manager.decrypt(nonce, ciphertext, tag)
-        file_data = json.loads(decrypted_data_json)
-
-        original_filename = file_data.get("filename")
-        mime_type = file_data.get("mime_type")
-        file_content_b64 = file_data.get("content")
-        received_hash = file_data.get("hash")
-        
-        if not all([original_filename, mime_type, file_content_b64, received_hash]):
-            raise ValueError("Dados de arquivo incompletos ou corrompidos.")
-
-        file_content_bytes = AESManager.base64_to_bytes(file_content_b64)
-
-        calculated_hash = hashlib.sha256(file_content_bytes).hexdigest()
+        # Re-verifica o hash (já verificado no ClientHandler, mas uma camada extra de segurança)
+        calculated_hash = hashlib.sha256(AESManager.base64_to_bytes(file_content_b64)).hexdigest()
         if calculated_hash != received_hash:
-            print(f"[ERROR] [ChatServer] Erro de integridade no arquivo '{original_filename}' de {addr}. Hash inválido.")
-            return 
+            print(f"[ERROR] [ChatServer] Erro de integridade no arquivo '{original_filename}' de {client_ip}. Hash inválido.")
+            return
 
-        print(f"[INFO] [ChatServer] Arquivo '{original_filename}' ({mime_type}) de {addr} ({sender_username}) recebido e verificado. Retransmitindo...")
+        print(f"[INFO] [ChatServer] Arquivo '{original_filename}' ({mime_type}) de {client_ip} ({sender_username}) recebido e verificado. Retransmitindo...")
 
-        file_data["sender_username"] = sender_username
-        retransmit_data_json = json.dumps(file_data)
-
-        broadcast_file_to_clients(retransmit_data_json.encode('utf-8'), conn) 
+        # O dicionário file_data_dict já contém o sender_username e o tipo "archive"
+        broadcast_file_to_clients(file_data_dict, sender_conn) # Passa o dicionário JSON
 
     except Exception as e:
-        print(f"[ERROR] [ChatServer] Erro ao lidar com transferência de arquivo de {addr}: {e}")
+        print(f"[ERROR] [ChatServer] Erro ao lidar com transferência de arquivo de {client_ip}: {e}")
         import traceback
         traceback.print_exc()
 
-def broadcast_file_to_clients(file_json_bytes: bytes, sender_conn: socket.socket):
+# broadcast_file_to_clients agora recebe o dicionário JSON completo do arquivo
+def broadcast_file_to_clients(file_data_dict: dict, sender_conn: socket.socket):
     """
     Retransmite um arquivo para todos os clientes conectados, exceto o remetente.
     Os dados do arquivo já devem estar em formato JSON (não criptografados).
@@ -117,6 +94,8 @@ def broadcast_file_to_clients(file_json_bytes: bytes, sender_conn: socket.socket
         print("[INFO] [ChatServer] Nenhum cliente conectado para retransmissão de arquivo.")
         return
 
+    json_file_str = json.dumps(file_data_dict) # Converte o dicionário para string JSON
+
     for handler in current_handlers:
         if handler.client_socket != sender_conn and handler._running:
             try:
@@ -125,10 +104,11 @@ def broadcast_file_to_clients(file_json_bytes: bytes, sender_conn: socket.socket
 
                 if dest_aes_key:
                     dest_aes_manager = AESManager(dest_aes_key)
-                    
-                    nonce, ciphertext, tag = dest_aes_manager.encrypt(file_json_bytes.decode('utf-8')) 
+
+                    nonce, ciphertext, tag = dest_aes_manager.encrypt(json_file_str) # Criptografa a string JSON
                     encrypted_file_data_for_client = nonce + b'|' + ciphertext + b'|' + tag
-                    
+
+                    # Envia o tamanho total dos dados criptografados (incluindo nonce, ciphertext, tag)
                     handler.client_socket.sendall(len(encrypted_file_data_for_client).to_bytes(4, 'big'))
                     handler.client_socket.sendall(encrypted_file_data_for_client)
                     print(f"[INFO] [ChatServer] Arquivo retransmitido para {handler.username} ({handler.addr[0]}).")
@@ -202,10 +182,10 @@ def start_server(chat_widget_instance, port, dos_detector: DoSDetector, host_cli
                         print(f"[INFO] [ChatServer] Conexão ao chat de {client_ip} aceita.")
                     except Exception as e:
                         print(f"[ERROR] [ChatServer] Erro ao criptografar/enviar 'ACCEPTED' para {client_ip}: {e}")
-                        conn.sendall(b"ERROR_ENCRYPTING_ACCEPTED\n") 
+                        conn.sendall(b"ERROR_ENCRYPTING_ACCEPTED\n")
                         conn.close()
                         continue
-                                            
+
                     handler = ClientHandler(conn, addr, session_key_for_client, dos_detector, host_client_data_receive_timeout)
 
                     thread = threading.Thread(target=handler.run, daemon=True)
@@ -214,9 +194,11 @@ def start_server(chat_widget_instance, port, dos_detector: DoSDetector, host_cli
                         handler.new_message_for_host.connect(chat_widget_instance.add_message_to_chat)
                         handler.client_status_for_host.connect(chat_widget_instance.add_message_to_chat)
                         handler.user_list_updated.connect(chat_widget_instance.update_user_list)
+                        # Conecta o sinal file_received_from_client para chamar handle_file_transfer
+                        # Passa o dicionário JSON completo do arquivo
                         handler.file_received_from_client.connect(
-                            lambda filename, mime_type, file_content_bytes, sender_username, conn_obj, aes_mgr, dos_det:
-                            threading.Thread(target=handle_file_transfer, args=(conn_obj, addr, aes_mgr, dos_det, sender_username, total_data_length), daemon=True).start()
+                            lambda file_data_dict, conn_obj, aes_mgr, dos_det:
+                            threading.Thread(target=handle_file_transfer, args=(file_data_dict, conn_obj, aes_mgr, dos_det), daemon=True).start()
                         )
 
 
