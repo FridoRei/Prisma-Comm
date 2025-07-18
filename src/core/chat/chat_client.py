@@ -383,7 +383,7 @@ class ChatClient:
                 "type": "archive", # Adicionado o tipo
                 "filename": filename,
                 "mime_type": mime_type,
-                "content": AESManager.bytes_to_base64(file_content),
+                "content": AESManager.bytes_to_base64(file_content), # Certifique-se de que isso está correto
                 "hash": file_hash,
                 "sender_username": self.nome_usuario # Adicionado sender_username
             }
@@ -408,4 +408,5 @@ class ChatClient:
             if self.chat_widget:
                 self.chat_widget.add_message_to_chat(f"[ERRO] Erro ao enviar arquivo: {e}")
             raise
+
 

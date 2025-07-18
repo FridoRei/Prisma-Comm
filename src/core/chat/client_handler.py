@@ -271,6 +271,7 @@ class ClientHandler(QObject):
 
             file_content_bytes = AESManager.base64_to_bytes(file_content_b64)
 
+            # Verifique o hash do conteúdo do arquivo
             calculated_hash = hashlib.sha256(file_content_bytes).hexdigest()
             if calculated_hash != received_hash:
                 print(f"[ERROR] [ClientHandler] Erro de integridade no arquivo '{original_filename}' de {self.username}. Hash inválido.")
@@ -290,6 +291,7 @@ class ClientHandler(QObject):
         except Exception as e:
             print(f"[ERROR] [ClientHandler] Erro ao lidar com arquivo recebido de {self.username} ({self.addr[0]}): {e}")
             self.new_message_for_host.emit(f"[ERRO] Erro ao receber arquivo de {self.username}: {e}")
+
 
 
     def send_to_client(self, message_data: dict): # Agora espera um dicionário (JSON)
