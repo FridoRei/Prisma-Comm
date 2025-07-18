@@ -6,12 +6,12 @@ import sys
 from src.gui.main_window_ui import MainWindowUI
 from src.gui.chat_widget import ChatWidget
 from src.services.app_service import AppService
-from src.gui.dialogs import PasswordInputDialog, Ed25519ChannelSelectionDialog, AdvancedTimeoutDialog
+from src.gui.dialogs import JoinNetworkDialog, Ed25519ChannelSelectionDialog, AdvancedTimeoutDialog
 from src.config.settings import (
     DEFAULT_USERNAME, DEFAULT_AUTH_PORT, DEFAULT_COMM_PORT, ED25519_CHANNELS,
-    DEFAULT_CLIENT_RSA_TIMEOUT, DEFAULT_CLIENT_PASSWORD_RESPONSE_TIMEOUT,
+    DEFAULT_CLIENT_PASSWORD_RESPONSE_TIMEOUT,
     DEFAULT_CLIENT_MESSAGE_RECEIVE_TIMEOUT, DEFAULT_CLIENT_HANDSHAKE_TIMEOUT,
-    DEFAULT_HOST_UDP_OPERATION_TIMEOUT, DEFAULT_HOST_CLIENT_DATA_RECEIVE_TIMEOUT
+    DEFAULT_HOST_CLIENT_DATA_RECEIVE_TIMEOUT, DEFAULT_CLIENT_ECC_HANDSHAKE_TIMEOUT
 )
 from src.gui.dialogs import PasswordInputDialog, Ed25519ChannelSelectionDialog
 import threading
@@ -46,11 +46,10 @@ class MainWindow(QMainWindow):
         }
         
         self.timeout_settings = {
-            "client_rsa_timeout": DEFAULT_CLIENT_RSA_TIMEOUT,
             "client_password_response_timeout": DEFAULT_CLIENT_PASSWORD_RESPONSE_TIMEOUT,
+            "client_ecc_handshake_timeout": DEFAULT_CLIENT_ECC_HANDSHAKE_TIMEOUT,
             "client_message_receive_timeout": DEFAULT_CLIENT_MESSAGE_RECEIVE_TIMEOUT,
             "client_handshake_timeout": DEFAULT_CLIENT_HANDSHAKE_TIMEOUT,
-            "host_udp_operation_timeout": DEFAULT_HOST_UDP_OPERATION_TIMEOUT,
             "host_client_data_receive_timeout": DEFAULT_HOST_CLIENT_DATA_RECEIVE_TIMEOUT
         }        
 
@@ -254,11 +253,13 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def on_join_clicked(self):
-        password_dialog = PasswordInputDialog(self, title="Senha do Host", message="Por favor, insira a senha do host:")
-        if password_dialog.exec() == QDialog.Accepted:
-            client_password = password_dialog.password
+        join_dialog = JoinNetworkDialog(self) 
+        if join_dialog.exec() == QDialog.Accepted:
+            client_password = join_dialog.password
+            server_ip_to_use = join_dialog.server_ip
+            use_gateway = join_dialog.use_gateway
         else:
-            self.show_dialog("Aviso", "Operação de juntar-se à rede cancelada. Senha não fornecida.")
+            self.show_dialog("Aviso", "Operação de juntar-se à rede cancelada. Informações não fornecidas.")
             return
 
         available_public_channels = [
@@ -297,8 +298,11 @@ class MainWindow(QMainWindow):
         self.app_service.handle_join_clicked(
             self.current_username,
             client_password,
-            client_ed25519_public_key_bytes
+            client_ed25519_public_key_bytes,
+            server_ip_to_use, 
+            use_gateway 
         )
+
 
     def show_dialog(self, titulo, mensagem):
         msg = QMessageBox(self)

@@ -1,14 +1,13 @@
 import threading
 from PySide6.QtWidgets import QMessageBox, QDialog
-from src.core.network.connection_manager import verificar_conexao_com_host, obter_gateway, obter_gateway_generico
+from src.core.network.connection_manager import obter_gateway, obter_gateway_generico, perform_ecc_auth_handshake
 from src.core.chat.chat_client import ChatClient
 from src.core.chat.chat_server import start_server, stop_chat_server
 from src.services.auth_service import AuthService
-from src.config.settings import DEFAULT_USERNAME, DEFAULT_AUTH_PORT, DEFAULT_COMM_PORT
-from src.core.chat.globals import temp_rsa_managers, temp_rsa_managers_lock, connected_users, connected_users_lock
+from src.config.settings import DEFAULT_USERNAME, DEFAULT_AUTH_PORT, DEFAULT_COMM_PORT, DEFAULT_CLIENT_ECC_HANDSHAKE_TIMEOUT
+from src.core.chat.globals import connected_users, connected_users_lock
 import socket
 from src.core.crypto.ecc_manager import ECCManager
-from src.gui.dialogs import JoinOptionDialog
 from cryptography.hazmat.primitives.asymmetric import ed25519
 from src.core.network.dos_detector import DoSDetector
 
@@ -17,8 +16,7 @@ class AppService:
         self.main_window = main_window_instance
         self.timeout_settings = timeout_settings
         self.dos_detector = DoSDetector()
-        self.host_udp_operation_timeout = self.timeout_settings['host_udp_operation_timeout']
-        self.auth_service = AuthService(auth_port=self.main_window.auth_port, dos_detector=self.dos_detector, host_udp_operation_timeout=self.host_udp_operation_timeout)
+        self.auth_service = AuthService(auth_port=self.main_window.auth_port, dos_detector=self.dos_detector)
         self.chat_client_instance = None
         self.chat_server_thread = None
         self.is_connected_to_chat = False
@@ -47,7 +45,7 @@ class AppService:
 
     def handle_host_clicked(self, host_password: str, host_ed25519_private_key: ed25519.Ed25519PrivateKey):
         try:
-            self.auth_service.start_server(host_password, self.host_udp_operation_timeout)
+            self.auth_service.start_server(host_password, host_ed25519_private_key)
         except Exception as e:
             self.show_error("Erro ao Iniciar Servidor", "Não foi possível iniciar o servidor de autenticação. Verifique as configurações e tente novamente.") 
             return
@@ -73,39 +71,45 @@ class AppService:
 
         self.chat_server_thread = threading.Thread(
             target=start_server,
-            args=(self.main_window.chat_widget_instance, self.main_window.comm_port,
-                  host_ed25519_private_key, self.dos_detector, self.timeout_settings['host_client_data_receive_timeout']),
+            args=(self.main_window.chat_widget_instance, self.main_window.comm_port, self.dos_detector, self.timeout_settings['host_client_data_receive_timeout']),
             daemon=True,
             name="ChatServerThread"
         )
         self.chat_server_thread.start()
         self.main_window.show_chat_page()
 
-    def handle_join_clicked(self, username: str, client_password: str, client_ed25519_public_key_bytes: bytes):
-        join_dialog = JoinOptionDialog(self.main_window)
-        if join_dialog.exec() == QDialog.Accepted:
-            server_ip_to_use = None
+    def handle_join_clicked(self, username: str, client_password: str, client_ed25519_public_key_bytes: bytes, server_ip_from_dialog: str = None, use_gateway_from_dialog: bool = False):
+        server_ip_to_use = None
 
-            if join_dialog.use_gateway:
-                server_ip_to_use = obter_gateway()
-                print(f"[INFO] [AppService] Tentando usar gateway: {server_ip_to_use}")
-            else:
-                server_ip_to_use = join_dialog.server_ip
-                print(f"[INFO] [AppService] Usando IP fornecido: {server_ip_to_use}")
-
-            if not server_ip_to_use or not self.server_ip_to_validate(server_ip_to_use):
-                self.show_error("Erro de Conexão", "Endereço IP do servidor inválido ou não encontrado.")
-                print(f"[ERROR] [AppService] Endereço IP inválido ou não encontrado: {server_ip_to_use}")
-                return
-
-            authentication_successful = verificar_conexao_com_host(server_ip_to_use, self.main_window.auth_port, client_password, self.timeout_settings['client_rsa_timeout'], self.timeout_settings['client_password_response_timeout'])
-            if authentication_successful: 
-                self.join_hotspot_chat(server_ip_to_use, username, client_ed25519_public_key_bytes) 
-            else:
-                self.show_error("Falha na Autenticação", "Não foi possível autenticar com o host. Verifique a senha e o IP e tente novamente.")  
-                print(f"[ERROR] [AppService] Falha na autenticação com {server_ip_to_use}.")
+        if use_gateway_from_dialog:
+            server_ip_to_use = obter_gateway()
+            print(f"[INFO] [AppService] Tentando usar gateway: {server_ip_to_use}")
         else:
-            self.show_dialog("Aviso", "Operação de junção à rede cancelada.")
+            server_ip_to_use = server_ip_from_dialog
+            print(f"[INFO] [AppService] Usando IP fornecido: {server_ip_to_use}")
+
+        if not server_ip_to_use or not self.server_ip_to_validate(server_ip_to_use):
+            self.show_error("Erro de Conexão", "Endereço IP do servidor inválido ou não encontrado.")
+            print(f"[ERROR] [AppService] Endereço IP inválido ou não encontrado: {server_ip_to_use}")
+            return
+
+        auth_result, session_aes_key = perform_ecc_auth_handshake(
+            server_ip_to_use,
+            self.main_window.auth_port,
+            client_password,
+            client_ed25519_public_key_bytes,
+            self.ecc_manager, 
+            self.timeout_settings.get('client_ecc_handshake_timeout'),
+            self.timeout_settings['client_password_response_timeout']
+        )
+
+        if auth_result == "AUTH_SUCCESS":
+            self.join_hotspot_chat(server_ip_to_use, username, session_aes_key)
+        else:
+            self.show_error("Falha na Autenticação", f"Não foi possível autenticar com o host: {auth_result}. Verifique a senha e o IP e tente novamente.")
+            print(f"[ERROR] [AppService] Falha na autenticação com {server_ip_to_use}: {auth_result}.")
+
+
 
     def server_ip_to_validate(self, ip):
         """Valida formato do IP"""
@@ -116,7 +120,7 @@ class AppService:
             print(f"[ERROR] [AppService] Formato de IP inválido: {ip}")
             return False
 
-    def join_hotspot_chat(self, server_ip: str, username: str, client_ed25519_public_key_bytes: bytes):
+    def join_hotspot_chat(self, server_ip: str, username: str, session_aes_key: bytes):
         self.disconnect_chat_client()
 
         self.main_window.setup_chat_widget(is_host=False)
@@ -127,7 +131,7 @@ class AppService:
             self.main_window.chat_widget_instance,
             username,
             self.ecc_manager,
-            client_ed25519_public_key_bytes,
+            session_aes_key,
             self.timeout_settings['client_message_receive_timeout'],
             self.timeout_settings['client_handshake_timeout']
         )
@@ -221,10 +225,5 @@ class AppService:
         self.disconnect_chat_client()
         self.dos_detector.stop()
 
-        with temp_rsa_managers_lock:
-            for ip in list(temp_rsa_managers.keys()):
-                if ip in temp_rsa_managers:
-                    temp_rsa_managers[ip]["manager"].clear_keys()
-                    del temp_rsa_managers[ip]
         with connected_users_lock:
             connected_users.clear()

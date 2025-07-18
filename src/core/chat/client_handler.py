@@ -1,3 +1,5 @@
+# /wifi-chat v2/src/core/chat/client_handler.py
+
 import traceback
 import socket
 from PySide6.QtCore import QObject, Signal, Slot
@@ -7,9 +9,11 @@ from src.core.crypto.aes_manager import AESManager
 from cryptography.hazmat.primitives.asymmetric import ed25519
 from src.core.network.dos_detector import DoSDetector
 from src.core.network.request_limiter import RequestLimiter
-import html 
+import html
+import json
 
 CHAT_MESSAGE_MAX_LENGTH = 600
+FILE_MAX_SIZE = 10 * 1024 * 1024
 
 def is_utf8_valid(data: bytes) -> bool:
     try:
@@ -29,26 +33,20 @@ class ClientHandler(QObject):
     new_message_for_host = Signal(str)
     client_status_for_host = Signal(str)
     user_list_updated = Signal()
+    # O sinal file_received_from_client agora também passa o tamanho total esperado
+    file_received_from_client = Signal(str, str, bytes, str, object, object, object, int)
 
-    def __init__(self, client_socket, addr, host_ed25519_private_key: ed25519.Ed25519PrivateKey, dos_detector: DoSDetector, host_client_data_receive_timeout: int):
+    def __init__(self, client_socket, addr, session_aes_key_bytes: bytes, dos_detector: DoSDetector, host_client_data_receive_timeout: int):
         super().__init__()
         self.client_socket = client_socket
         self.addr = addr
         self.username = f"[{addr[0]}]"
         self._running = True
         self.client_socket.settimeout(host_client_data_receive_timeout)
-        self.aes_manager = None
+        self.aes_manager = AESManager(session_aes_key_bytes)
         self.ecc_manager = ECCManager()
         self.dos_detector = dos_detector
         self.request_limiter = RequestLimiter(max_length=CHAT_MESSAGE_MAX_LENGTH)
-
-        if host_ed25519_private_key:
-            self.ecc_manager._ed25519_private_key = host_ed25519_private_key
-            self.ecc_manager._ed25519_public_key = host_ed25519_private_key.public_key()
-        else:
-            print(f"[ERROR] [ClientHandler] Nenhuma chave Ed25519 do host fornecida para {self.addr[0]}. Handshake ECC pode falhar.")
-
-        self.host_ed25519_private_key = host_ed25519_private_key
 
     def stop(self):
         self._running = False
@@ -70,144 +68,82 @@ class ClientHandler(QObject):
         client_ip = self.addr[0]
 
         try:
-
-            self.client_status_for_host.emit(f"[INFO] Iniciando handshake de chave ECC com {self.addr[0]}...")
-            try:
-                self.ecc_manager.generate_x25519_keys()
-                server_x25519_public_bytes = self.ecc_manager.get_x25519_public_key_bytes()
-
-                if not self.ecc_manager.has_ed25519_private_key():
-                    raise Exception("Erro de segurança: Chave de assinatura do servidor ausente.")
-
-                signature = self.ecc_manager.sign_data(server_x25519_public_bytes)
-
-                handshake_data = f"{ECCManager.bytes_to_base64(server_x25519_public_bytes)}|{AESManager.bytes_to_base64(signature)}"
-                self.client_socket.sendall(handshake_data.encode('utf-8'))
-                self.client_status_for_host.emit(f"[INFO] Chave X25519 e assinatura do servidor enviadas para {self.addr[0]}.")
-
-                client_handshake_response_bytes = self.client_socket.recv(2048)
-                if not client_handshake_response_bytes:
-                    raise ValueError("Dados de handshake do cliente vazios.")
-
-                if not is_utf8_valid(client_handshake_response_bytes):
-                    print(f"[WARNING] [ClientHandler] Dados de handshake de {self.addr[0]} não são UTF-8 válidos. Encerrando conexão.")
-                    self.client_socket.sendall(b"ECC_HANDSHAKE_FAILURE_INVALID_ENCODING")
-                    self.client_socket.close()
-                    return
-
-                client_handshake_response_b64 = client_handshake_response_bytes.decode('utf-8').strip()
-
-                if self.request_limiter.is_request_too_large(client_handshake_response_b64.encode('utf-8')):
-                    print(f"[WARNING] [ClientHandler] Handshake de {self.addr[0]} excedeu o limite de tamanho. Encerrando conexão.")
-                    self.client_socket.sendall(b"ECC_HANDSHAKE_FAILURE_TOO_LARGE")
-                    self.client_socket.close()
-                    return
-
-                client_x25519_public_b64 = client_handshake_response_b64
-
-                if not client_x25519_public_b64:
-                    raise ValueError("Chave pública X25519 do cliente não recebida ou vazia.")
-
-                client_x25519_public_bytes = ECCManager.base64_to_bytes(client_x25519_public_b64)
-                self.client_status_for_host.emit(f"[INFO] Chave X25519 do cliente recebida de {self.addr[0]}.")
-
-                derived_aes_key = self.ecc_manager.derive_shared_key(client_x25519_public_bytes)
-                self.aes_manager = AESManager(derived_aes_key)
-                self.client_status_for_host.emit(f"[INFO] Chave AES derivada para {self.addr[0]}.")
-
-                with client_aes_keys_lock:
-                    client_aes_keys[self.addr[0]] = self.aes_manager.get_key()
-
-                self.ecc_manager.clear_x25519_keys()
-
-                handshake_success_message = "ECC_HANDSHAKE_SUCCESS"
-                nonce, ciphertext, tag = self.aes_manager.encrypt(handshake_success_message)
-                encrypted_handshake_success_b64 = f"{AESManager.bytes_to_base64(nonce)}|{AESManager.bytes_to_base64(ciphertext)}|{AESManager.bytes_to_base64(tag)}"
-                self.client_socket.sendall(encrypted_handshake_success_b64.encode('utf-8'))
-                
-                self.client_status_for_host.emit(f"[SUCCESS] Handshake ECC concluído com {self.addr[0]}.")
-
-            except socket.timeout:
-                self.client_status_for_host.emit(f"[ERROR] Timeout durante o handshake de segurança com {self.addr[0]}.")
-                print(f"[ERROR] [ClientHandler] Timeout durante o handshake ECC com {self.addr[0]}.")
-                self.client_socket.sendall(b"ECC_HANDSHAKE_FAILURE")
-                self.client_socket.close()
-                return
-            except ValueError as e:
-                self.client_status_for_host.emit(f"[ERROR] Erro de formato de dados durante o handshake de segurança com {self.addr[0]}.")
-                print(f"[ERROR] [ClientHandler] Erro de formato de dados durante o handshake ECC com {self.addr[0]}: {e}")
-                self.client_socket.sendall(b"ECC_HANDSHAKE_FAILURE")
-                self.client_socket.close()
-                return
-            except Exception as e:
-                self.client_status_for_host.emit(f"[ERROR] Falha no handshake de segurança com {self.addr[0]}.") 
-                print(f"[ERROR] [ClientHandler] Falha no handshake ECC com {self.addr[0]}: {e}")
-                self.client_socket.sendall(b"ECC_HANDSHAKE_FAILURE")
+            encrypted_username_bytes = self.client_socket.recv(1024)
+            if not encrypted_username_bytes:
+                print(f"[WARNING] [ClientHandler] Cliente {self.addr[0]} desconectou antes de enviar o nome de usuário.")
                 self.client_socket.close()
                 return
 
-            try:
-                encrypted_username_bytes = self.client_socket.recv(1024)
-                if not encrypted_username_bytes:
-                    print(f"[WARNING] [ClientHandler] Cliente {self.addr[0]} desconectou antes de enviar o nome de usuário.")
-                    self.client_socket.close()
-                    return
-
-                if not is_utf8_valid(encrypted_username_bytes):
-                    print(f"[WARNING] [ClientHandler] Nome de usuário de {self.addr[0]} não é UTF-8 válido. Encerrando conexão.")
-                    self.client_socket.close()
-                    return
-
-                encrypted_username_b64 = encrypted_username_bytes.decode('utf-8').strip()
-
-                if self.request_limiter.is_request_too_large(encrypted_username_b64.encode('utf-8')):
-                    print(f"[WARNING] [ClientHandler] Nome de usuário de {self.addr[0]} excedeu o limite de tamanho. Encerrando conexão.")
-                    self.client_socket.close()
-                    return
-
-                parts = encrypted_username_b64.split('|')
-                if len(parts) == 3:
-                    nonce = AESManager.base64_to_bytes(parts[0])
-                    ciphertext = AESManager.base64_to_bytes(parts[1])
-                    tag = AESManager.base64_to_bytes(parts[2])
-
-                    try:
-                        decrypted_username = self.aes_manager.decrypt(nonce, ciphertext, tag)
-                        self.username = sanitize_chat_message(decrypted_username)  
-                        self.client_status_for_host.emit(f"[INFO] Cliente '{self.username}' ({self.addr[0]}) conectado.")
-                    except Exception as e:
-                        self.client_status_for_host.emit(f"[ERROR] Erro ao processar nome de usuário de {self.addr[0]}. Conexão encerrada.")
-                        print(f"[ERROR] [ClientHandler] ERRO ao descriptografar nome de usuário de {self.addr[0]}: {e}")
-                        self.client_socket.close()
-                        return
-                else:
-                    print(f"[WARNING] [ClientHandler] Formato de nome de usuário inválido de {self.addr[0]}. Encerrando conexão.")
-                    self.client_socket.close()
-                    return
-
-                with connected_users_lock:
-                    connected_users[self.addr[0]] = {
-                        "username": self.username,
-                        "handler": self
-                    }
-                self.user_list_updated.emit()
-
-            except socket.timeout:
-                print(f"[WARNING] [ClientHandler] Timeout ao esperar nome de usuário de {self.addr[0]}. Cliente desconectado.")
+            if not is_utf8_valid(encrypted_username_bytes):
+                print(f"[WARNING] [ClientHandler] Nome de usuário de {self.addr[0]} não é UTF-8 válido. Encerrando conexão.")
                 self.client_socket.close()
                 return
-            except Exception as e:
-                print(f"[ERROR] [ClientHandler] Erro ao receber nome de usuário de {self.addr[0]}: {e}. Cliente desconectado.")
+
+            encrypted_username_b64 = encrypted_username_bytes.decode('utf-8').strip()
+
+            parts = encrypted_username_b64.split('|')
+            if len(parts) == 3:
+                nonce = AESManager.base64_to_bytes(parts[0])
+                ciphertext = AESManager.base64_to_bytes(parts[1])
+                tag = AESManager.base64_to_bytes(parts[2])
+
+                try:
+                    decrypted_username = self.aes_manager.decrypt(nonce, ciphertext, tag)
+                    self.username = sanitize_chat_message(decrypted_username)
+                    self.new_message_for_host.emit(f"[INFO] Cliente '{self.username}' ({self.addr[0]}) conectado.")
+                except Exception as e:
+                    self.new_message_for_host.emit(f"[ERROR] Erro ao processar nome de usuário de {self.addr[0]}. Conexão encerrada.")
+                    print(f"[ERROR] [ClientHandler] ERRO ao descriptografar nome de usuário de {self.addr[0]}: {e}")
+                    self.client_socket.close()
+                    return
+            else:
+                print(f"[WARNING] [ClientHandler] Formato de nome de usuário inválido de {self.addr[0]}. Encerrando conexão.")
                 self.client_socket.close()
                 return
+
+            with connected_users_lock:
+                connected_users[self.addr[0]] = {
+                    "username": self.username,
+                    "handler": self
+                }
+            self.user_list_updated.emit()
 
             while self._running:
                 try:
-                    encrypted_message_bytes = self.client_socket.recv(8192)
-                    if not encrypted_message_bytes:
+                    # Peek para verificar o tipo de dado (mensagem ou arquivo)
+                    header_bytes = self.client_socket.recv(4, socket.MSG_PEEK)
+                    if not header_bytes:
                         print(f"[INFO] [ClientHandler] Cliente {self.username} ({self.addr[0]}) desconectou (recebeu dados vazios).")
                         break
 
+                    # Tenta decodificar como int para ver se é um tamanho de arquivo
+                    try:
+                        data_length = int.from_bytes(header_bytes, 'big')
+                        # Se for um número grande, provavelmente é um arquivo
+                        if data_length > 0 and data_length <= FILE_MAX_SIZE + 4096: # Max 10MB + overhead
+                            # Consome os 4 bytes do tamanho
+                            self.client_socket.recv(4)
+                            # Emite o sinal para o ChatServer lidar com a transferência do arquivo
+                            # Passamos o data_length para que handle_file_transfer saiba quantos bytes esperar
+                            self.file_received_from_client.emit(
+                                "", "", b"", self.username, self.client_socket, self.aes_manager, self.dos_detector, data_length
+                            )
+                            # IMPORTANTE: Não tente ler mais dados do socket neste loop,
+                            # pois handle_file_transfer irá consumir o restante do arquivo.
+                            # A próxima iteração do loop lerá a próxima "mensagem" ou "cabeçalho de arquivo".
+                            continue # Pula o restante do loop e vai para a próxima iteração
+
+                    except ValueError:
+                        # Não é um tamanho de arquivo, então é uma mensagem de chat normal
+                        pass
+
+                    # Se não foi um arquivo, processa como mensagem de chat
+                    encrypted_message_bytes = self.client_socket.recv(8192)
+                    if not encrypted_message_bytes:
+                        print(f"[INFO] [ClientHandler] Cliente {self.username} ({self.addr[0]}) desconectou (dados vazios após peek).")
+                        break
+
+                    # A validação UTF-8 só deve ocorrer para mensagens de chat, não para dados binários de arquivo
                     if not is_utf8_valid(encrypted_message_bytes):
                         print(f"[WARNING] [ClientHandler] Mensagem de {self.username} ({self.addr[0]}) não é UTF-8 válida. Descartando.")
                         continue
@@ -230,7 +166,7 @@ class ClientHandler(QObject):
 
                         try:
                             mensagem_descriptografada = self.aes_manager.decrypt(nonce, ciphertext, tag)
-                            sanitized_message = sanitize_chat_message(mensagem_descriptografada)  
+                            sanitized_message = sanitize_chat_message(mensagem_descriptografada)
                             self.new_message_for_host.emit(f"{self.username}: {sanitized_message}")
                             self.broadcast_message(f"{self.username}: {sanitized_message}", self.client_socket)
                         except Exception as e:
@@ -248,7 +184,7 @@ class ClientHandler(QObject):
                     break
                 except Exception as e:
                     if self._running:
-                        print(f"[CRITICAL] [ClientHandler] Erro inesperado com cliente {self.username} ({self.addr[0]}).") 
+                        print(f"[CRITICAL] [ClientHandler] Erro inesperado com cliente {self.username} ({self.addr[0]}).")
                         self.new_message_for_host.emit(f"[ERROR] Erro inesperado com cliente {self.username} ({self.addr[0]}).")
                     break
 
@@ -260,7 +196,7 @@ class ClientHandler(QObject):
             with client_aes_keys_lock:
                 if client_ip in client_aes_keys:
                     del client_aes_keys[client_ip]
-                    self.client_status_for_host.emit(f"[INFO] Chave AES de {client_ip} removida.")
+                    self.client_status_for_host.emit(f"[INFO] Chave AES de sessão de {client_ip} removida.")
 
             with connected_users_lock:
                 if client_ip in connected_users:
@@ -273,6 +209,7 @@ class ClientHandler(QObject):
             except Exception as e:
                 print(f"[ERROR] [ClientHandler] Erro ao fechar socket no bloco finally para {self.username} ({self.addr[0]}): {e}")
             self.client_status_for_host.emit(f"[INFO] Cliente '{self.username}' ({self.addr[0]}) desconectado.")
+
 
     def send_to_client(self, message: str):
         try:
@@ -315,3 +252,4 @@ class ClientHandler(QObject):
                     handler.stop()
                 except Exception as e:
                     print(f"[ERROR] [ClientHandler] Erro no broadcast criptografado para {handler.username} ({handler.addr[0]}): {e}")
+
