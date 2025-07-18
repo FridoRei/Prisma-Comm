@@ -1,4 +1,3 @@
-# /wifi-chat v2/src/core/chat/client_handler.py
 
 import traceback
 import socket
@@ -33,7 +32,6 @@ class ClientHandler(QObject):
     new_message_for_host = Signal(str)
     client_status_for_host = Signal(str)
     user_list_updated = Signal()
-    # O sinal file_received_from_client agora também passa o tamanho total esperado
     file_received_from_client = Signal(str, str, bytes, str, object, object, object, int)
 
     def __init__(self, client_socket, addr, session_aes_key_bytes: bytes, dos_detector: DoSDetector, host_client_data_receive_timeout: int):
@@ -110,40 +108,28 @@ class ClientHandler(QObject):
 
             while self._running:
                 try:
-                    # Peek para verificar o tipo de dado (mensagem ou arquivo)
                     header_bytes = self.client_socket.recv(4, socket.MSG_PEEK)
                     if not header_bytes:
                         print(f"[INFO] [ClientHandler] Cliente {self.username} ({self.addr[0]}) desconectou (recebeu dados vazios).")
                         break
 
-                    # Tenta decodificar como int para ver se é um tamanho de arquivo
                     try:
                         data_length = int.from_bytes(header_bytes, 'big')
-                        # Se for um número grande, provavelmente é um arquivo
-                        if data_length > 0 and data_length <= FILE_MAX_SIZE + 4096: # Max 10MB + overhead
-                            # Consome os 4 bytes do tamanho
+                        if data_length > 0 and data_length <= FILE_MAX_SIZE + 4096: 
                             self.client_socket.recv(4)
-                            # Emite o sinal para o ChatServer lidar com a transferência do arquivo
-                            # Passamos o data_length para que handle_file_transfer saiba quantos bytes esperar
                             self.file_received_from_client.emit(
                                 "", "", b"", self.username, self.client_socket, self.aes_manager, self.dos_detector, data_length
                             )
-                            # IMPORTANTE: Não tente ler mais dados do socket neste loop,
-                            # pois handle_file_transfer irá consumir o restante do arquivo.
-                            # A próxima iteração do loop lerá a próxima "mensagem" ou "cabeçalho de arquivo".
-                            continue # Pula o restante do loop e vai para a próxima iteração
+                            continue
 
                     except ValueError:
-                        # Não é um tamanho de arquivo, então é uma mensagem de chat normal
                         pass
 
-                    # Se não foi um arquivo, processa como mensagem de chat
                     encrypted_message_bytes = self.client_socket.recv(8192)
                     if not encrypted_message_bytes:
                         print(f"[INFO] [ClientHandler] Cliente {self.username} ({self.addr[0]}) desconectou (dados vazios após peek).")
                         break
 
-                    # A validação UTF-8 só deve ocorrer para mensagens de chat, não para dados binários de arquivo
                     if not is_utf8_valid(encrypted_message_bytes):
                         print(f"[WARNING] [ClientHandler] Mensagem de {self.username} ({self.addr[0]}) não é UTF-8 válida. Descartando.")
                         continue

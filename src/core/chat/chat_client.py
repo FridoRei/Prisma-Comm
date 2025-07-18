@@ -5,14 +5,14 @@ from src.core.crypto.ecc_manager import ECCManager
 from src.core.crypto.aes_manager import AESManager
 import os
 import json
-import hashlib # Importar hashlib para verificação de integridade
+import hashlib 
 
 class ChatClientWorker(QObject):
     message_received = Signal(str)
     connection_error = Signal(str)
     disconnected = Signal()
     specific_error = Signal(str)
-    file_received = Signal(str, str, bytes) # Sinal para arquivos: (nome_arquivo, tipo_mime, dados_arquivo)
+    file_received = Signal(str, str, bytes)
 
     def __init__(self, client_socket, aes_manager: AESManager):
         super().__init__()
@@ -37,7 +37,6 @@ class ChatClientWorker(QObject):
     def listen_for_messages(self):
         while self._running:
             try:
-                # Peek para verificar o tipo de dado (mensagem ou arquivo)
                 header_bytes = self.client_socket.recv(4, socket.MSG_PEEK)
                 if not header_bytes:
                     self.message_received.emit("[INFO] Conexão perdida com o servidor.")
@@ -45,15 +44,12 @@ class ChatClientWorker(QObject):
                     self.disconnected.emit()
                     break
 
-                # Tenta decodificar como int para ver se é um tamanho de arquivo
                 try:
                     data_length = int.from_bytes(header_bytes, 'big')
-                    # Se for um número grande, provavelmente é um arquivo
-                    if data_length > 0 and data_length <= 10 * 1024 * 1024 + 4096: # Max 10MB + overhead
+                    if data_length > 0 and data_length <= 10 * 1024 * 1024 + 4096: 
                         self._handle_incoming_file()
                         continue
                 except ValueError:
-                    # Não é um tamanho de arquivo, então é uma mensagem de chat normal
                     pass
 
                 encrypted_data_b64 = self.client_socket.recv(8192).decode('utf-8')
@@ -118,7 +114,6 @@ class ChatClientWorker(QObject):
 
     def _handle_incoming_file(self):
         try:
-            # Recebe o tamanho total dos dados (incluindo metadados e arquivo criptografado)
             total_data_length_bytes = self.client_socket.recv(4)
             if not total_data_length_bytes:
                 print("[WARNING] [ChatClientWorker] Conexão perdida ao receber tamanho do arquivo.")
@@ -126,14 +121,12 @@ class ChatClientWorker(QObject):
                 return
             total_data_length = int.from_bytes(total_data_length_bytes, 'big')
 
-            if total_data_length > 10 * 1024 * 1024 + 4096: # Max 10MB + overhead
+            if total_data_length > 10 * 1024 * 1024 + 4096: 
                 print(f"[WARNING] [ChatClientWorker] Arquivo recebido excede o limite de tamanho ({total_data_length} bytes). Descartando.")
-                # Tenta consumir o restante dos dados para não corromper o stream
                 self.client_socket.recv(total_data_length) 
                 self.message_received.emit(f"[ERRO] Arquivo recebido excede o limite de tamanho.")
                 return
 
-            # Recebe os dados criptografados (metadados + arquivo)
             encrypted_full_data = b''
             bytes_received = 0
             while bytes_received < total_data_length:
@@ -145,8 +138,7 @@ class ChatClientWorker(QObject):
                 encrypted_full_data += chunk
                 bytes_received += len(chunk)
 
-            # Descriptografa os dados completos
-            parts = encrypted_full_data.split(b'|', 2) # Divide em 3 partes: nonce, ciphertext, tag
+            parts = encrypted_full_data.split(b'|', 2)
             if len(parts) != 3:
                 raise ValueError("Formato de dados de arquivo criptografado inválido.")
 
@@ -161,14 +153,13 @@ class ChatClientWorker(QObject):
             mime_type = file_data.get("mime_type")
             file_content_b64 = file_data.get("content")
             received_hash = file_data.get("hash")
-            sender_username = file_data.get("sender_username", "Desconhecido") # Novo campo para o remetente
+            sender_username = file_data.get("sender_username", "Desconhecido") 
 
             if not all([original_filename, mime_type, file_content_b64, received_hash]):
                 raise ValueError("Dados de arquivo incompletos ou corrompidos.")
 
             file_content_bytes = AESManager.base64_to_bytes(file_content_b64)
 
-            # Verifica a integridade do arquivo
             calculated_hash = hashlib.sha256(file_content_bytes).hexdigest()
             if calculated_hash != received_hash:
                 print(f"[ERROR] [ChatClientWorker] Erro de integridade no arquivo '{original_filename}'. Hash inválido.")
@@ -181,7 +172,7 @@ class ChatClientWorker(QObject):
         except Exception as e:
             print(f"[ERROR] [ChatClientWorker] Erro ao lidar com arquivo recebido: {e}")
             self.message_received.emit(f"[ERRO] Erro ao receber arquivo: {e}")
-            self.disconnected.emit() # Pode ser um erro grave, desconecta para evitar mais problemas
+            self.disconnected.emit() 
 
 class ChatClient:
     def __init__(self, host_ip, port, chat_widget=None, nome_usuario="Usuário", ecc_manager=None, session_aes_key: bytes = None, recive_timeout: int = 1, handshake_timeout: int = 5):
@@ -242,7 +233,7 @@ class ChatClient:
             if self.chat_widget:
                 self.worker.message_received.connect(self.chat_widget.add_message_to_chat)
                 self.worker.connection_error.connect(self.chat_widget.add_message_to_chat)
-                self.worker.file_received.connect(self.chat_widget.add_file_to_chat) # Conecta o novo sinal
+                self.worker.file_received.connect(self.chat_widget.add_file_to_chat) 
 
             self.thread = threading.Thread(target=self.worker.listen_for_messages, daemon=True)
             self.thread.start()
@@ -335,45 +326,39 @@ class ChatClient:
                 raise Exception("Chave AES não estabelecida. Handshake ECC falhou?")
 
             file_size = os.path.getsize(file_path)
-            if file_size > 10 * 1024 * 1024: # 10 MB limit
+            if file_size > 10 * 1024 * 1024:
                 raise ValueError("O arquivo excede o tamanho máximo permitido de 10MB.")
 
             with open(file_path, 'rb') as file:
                 file_content = file.read()
             
-            # Calcular o hash SHA256 do conteúdo do arquivo
             file_hash = hashlib.sha256(file_content).hexdigest()
 
-            # Obter nome do arquivo e tipo MIME (simplificado, pode ser melhorado)
             filename = os.path.basename(file_path)
             import mimetypes
             mime_type, _ = mimetypes.guess_type(file_path)
             if mime_type is None:
-                mime_type = "application/octet-stream" # Tipo genérico se não puder ser adivinhado
+                mime_type = "application/octet-stream"
 
-            # Preparar metadados e conteúdo para criptografia
             file_data = {
                 "filename": filename,
                 "mime_type": mime_type,
                 "content": AESManager.bytes_to_base64(file_content),
                 "hash": file_hash,
-                "sender_username": self.nome_usuario # Incluir o nome do remetente
+                "sender_username": self.nome_usuario 
             }
             
-            # Criptografar os metadados e o conteúdo do arquivo
             encrypted_file_data_json = json.dumps(file_data)
             nonce, ciphertext, tag = self.aes_manager.encrypt(encrypted_file_data_json)
 
-            # Combinar nonce, ciphertext e tag para envio
             full_encrypted_data = nonce + b'|' + ciphertext + b'|' + tag
 
-            # Enviar o tamanho total dos dados criptografados (incluindo metadados)
             self.client_socket.sendall(len(full_encrypted_data).to_bytes(4, 'big'))
-            # Enviar os dados criptografados
+
             self.client_socket.sendall(full_encrypted_data)
             
             print(f"[INFO] [ChatClient] Arquivo '{filename}' enviado com sucesso.")
-            self.chat_widget.add_message_to_chat(f"Você enviou o arquivo: {filename}") # Confirmação na UI
+            self.chat_widget.add_message_to_chat(f"Você enviou o arquivo: {filename}")
         except ValueError as ve:
             print(f"[ERROR] [ChatClient] Erro de validação ao enviar arquivo: {ve}")
             if self.chat_widget:
