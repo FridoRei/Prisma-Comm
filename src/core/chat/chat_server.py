@@ -21,7 +21,7 @@ def file_queue_processor(dos_detector: DoSDetector, chat_widget_instance):
     while chat_server_running: 
         try:
             file_data, sender_conn, aes_manager = file_transfer_queue.get(timeout=1) 
-            handle_file_transfer(file_data, sender_conn, aes_manager, dos_detector)
+            handle_file_transfer(file_data, sender_conn, aes_manager, dos_detector, chat_widget_instance)
             file_transfer_queue.task_done() 
         except Empty: 
             continue    
