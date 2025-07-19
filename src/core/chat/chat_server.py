@@ -82,15 +82,7 @@ def handle_file_transfer(file_data_dict: dict, sender_conn: socket.socket, aes_m
             print(f"[ERROR] [ChatServer] Erro de integridade no arquivo '{original_filename}' de {client_ip}. Hash inválido.")
             return
 
-        file_content_bytes = AESManager.base64_to_bytes(file_content_b64)
-        if chat_widget_instance:
-            chat_widget_instance.add_file_to_chat(
-                original_filename,
-                mime_type,
-                file_content_bytes, 
-                sender_username
-            )
-            chat_widget_instance.add_message_to_chat(f"[INFO] Arquivo '{original_filename}' de {sender_username} recebido pelo Host.")        
+        file_content_bytes = AESManager.base64_to_bytes(file_content_b64)      
             
         broadcast_file_to_clients(file_data_dict, sender_conn) 
 
@@ -218,6 +210,7 @@ def start_server(chat_widget_instance, port, dos_detector: DoSDetector, host_cli
                         handler.new_message_for_host.connect(chat_widget_instance.add_message_to_chat)
                         handler.client_status_for_host.connect(chat_widget_instance.add_message_to_chat)
                         handler.user_list_updated.connect(chat_widget_instance.update_user_list)
+                        handler.file_received_for_host.connect(chat_widget_instance.add_file_to_chat)
                         
                     thread.start()
                 else:
