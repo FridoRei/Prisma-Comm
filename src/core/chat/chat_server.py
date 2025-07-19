@@ -102,7 +102,6 @@ def broadcast_file_to_clients(file_data_dict: dict, sender_conn: socket.socket):
         print("[INFO] [ChatServer] Nenhum cliente conectado para retransmissão de arquivo.")
         return
 
-    # Converter o dicionário para JSON
     json_file_str = json.dumps(file_data_dict)
     
     for handler in current_handlers:
@@ -114,14 +113,12 @@ def broadcast_file_to_clients(file_data_dict: dict, sender_conn: socket.socket):
                 if dest_aes_key:
                     dest_aes_manager = AESManager(dest_aes_key)
                     
-                    # Criptografar os dados JSON
                     nonce, ciphertext, tag = dest_aes_manager.encrypt(json_file_str) 
 
                     encrypted_file_data_for_client = nonce + b'<-->' + ciphertext + b'<-->' + tag
 
-                    # Enviar tamanho primeiro
                     handler.client_socket.sendall(len(encrypted_file_data_for_client).to_bytes(4, 'big'))
-                    # Enviar dados criptografados
+
                     handler.client_socket.sendall(encrypted_file_data_for_client)
                 else:
                     print(f"[WARNING] [ChatServer] ERRO: Chave AES não encontrada para {handler.username} ({handler.addr[0]}). Não foi possível retransmitir arquivo.")

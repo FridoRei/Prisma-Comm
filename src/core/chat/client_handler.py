@@ -274,7 +274,6 @@ class ClientHandler(QObject):
                 file_content_bytes,
                 self.username
             )
-            self.new_message_for_host.emit(f"[INFO] Arquivo '{original_filename}' de {self.username} recebido pelo Host.")
 
         except json.JSONDecodeError:
             print(f"[ERROR] [ClientHandler] Erro ao decodificar JSON do arquivo recebido de {self.username} ({self.addr[0]}).")

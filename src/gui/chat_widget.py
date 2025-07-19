@@ -186,12 +186,11 @@ class ChatWidget(QWidget):
         mensagem = self.entry.text().strip()
 
         if mensagem:
-            # A exibição local da mensagem do usuário não precisa do JSON completo
             self.add_message_to_chat(f"Você: {mensagem}")
             self.entry.clear()
             if self.is_host:
                 if self.broadcast_func:
-                    self.broadcast_func(mensagem, self) # broadcast_func agora espera a mensagem de texto
+                    self.broadcast_func(mensagem, self) 
             else:
                 if self.client:
                     try:
@@ -205,18 +204,11 @@ class ChatWidget(QWidget):
         """Adiciona uma mensagem à área de chat"""
         self.textview.append(mensagem)
 
-    @Slot(str, str, bytes, str) # Adicionado sender_username
+    @Slot(str, str, bytes, str) 
     def add_file_to_chat(self, filename: str, mime_type: str, file_content: bytes, sender_username: str):
         """
         Adiciona uma representação de arquivo à área de chat e permite salvar.
         """
-        # O sender_username já vem do sinal, não precisa mais parsear do filename
-        # if ":" in filename and not os.path.exists(filename):
-        #     parts = filename.split(':', 1)
-        #     if len(parts) == 2:
-        #         sender_username = parts[0].strip()
-        #         filename = parts[1].strip()
-
         file_widget = QWidget()
         file_layout = QHBoxLayout(file_widget)
         file_layout.setContentsMargins(0, 0, 0, 0)
@@ -247,10 +239,6 @@ class ChatWidget(QWidget):
         file_layout.addWidget(save_button)
 
         file_layout.addStretch()
-
-        # A linha abaixo pode ser removida se a exibição for feita apenas via QMessageBox
-        # file_html = f"<p style='color: #ADD8E6;'><b>Arquivo de {sender_username}:</b> {filename} ({mime_type}) <a href='save_file:{filename}'>[Salvar]</a></p>"
-        # self.textview.append(file_html)
 
         file_message_container = QWidget()
         file_message_container_layout = QHBoxLayout(file_message_container)
@@ -371,4 +359,3 @@ class ChatWidget(QWidget):
                     self.add_message_to_chat(f"[Host] Erro: Handler não encontrado para {client_ip}.")
             else:
                 self.add_message_to_chat(f"[Host] Erro: Cliente {client_ip} não encontrado na lista de conectados.")
-
