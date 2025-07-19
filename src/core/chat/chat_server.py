@@ -105,7 +105,7 @@ def broadcast_file_to_clients(file_data_dict: dict, sender_conn: socket.socket):
                 if dest_aes_key:
                     dest_aes_manager = AESManager(dest_aes_key)
 
-                    nonce, ciphertext, tag = dest_aes_manager.encrypt(json_file_str) # Criptografa a string JSON
+                    nonce, ciphertext, tag = dest_aes_manager.encrypt(json_file_str.encode('utf-8')) # Criptografa a string JSON
                     encrypted_file_data_for_client = nonce + b'|' + ciphertext + b'|' + tag
 
                     # Envia o tamanho total dos dados criptografados (incluindo nonce, ciphertext, tag)

@@ -3,7 +3,7 @@ import threading
 import time
 import datetime
 import uuid
-
+import hashlib
 from src.core.auth.token_manager import verificar_senha
 from src.core.chat.globals import authenticated_ips, authenticated_ips_lock, client_aes_keys, client_aes_keys_lock
 from src.core.network.dos_detector import DoSDetector
@@ -97,6 +97,7 @@ def handle_auth_client(conn: socket.socket, addr: tuple, host_password: str, dos
 
             session_aes_manager = AESManager() 
             session_aes_key_bytes = session_aes_manager.get_key()
+            print(f"[DEBUG] [AuthServer] Servidor gerou session_aes_key (hash): {hashlib.sha256(session_aes_key_bytes).hexdigest()}")
             
             nonce_key, cipher_key, tag_key = temp_aes_manager.encrypt(AESManager.bytes_to_base64(session_aes_key_bytes))
             encrypted_session_key_b64 = f"{AESManager.bytes_to_base64(nonce_key)}|{AESManager.bytes_to_base64(cipher_key)}|{AESManager.bytes_to_base64(tag_key)}"
@@ -129,6 +130,7 @@ def handle_auth_client(conn: socket.socket, addr: tuple, host_password: str, dos
                 
                 with client_aes_keys_lock:
                     client_aes_keys[client_ip] = session_aes_key_bytes
+                print(f"[DEBUG] [AuthServer] Servidor armazenou session_aes_key para {client_ip} (hash): {hashlib.sha256(client_aes_keys[client_ip]).hexdigest()}")
                 with authenticated_ips_lock:
                     authenticated_ips[client_ip] = datetime.datetime.now() 
 

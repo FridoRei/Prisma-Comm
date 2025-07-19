@@ -157,6 +157,7 @@ class ChatClientWorker(QObject):
                     return
                 encrypted_full_data += chunk
                 bytes_received += len(chunk)
+            print(f"[DEBUG] [ChatClientWorker] Arquivo recebido. Tamanho total criptografado: {len(encrypted_full_data)} bytes. Hash dos dados criptografados: {hashlib.sha256(encrypted_full_data).hexdigest()}")
 
             parts = encrypted_full_data.split(b'|', 2)
             if len(parts) != 3:
@@ -390,9 +391,7 @@ class ChatClient:
 
             encrypted_file_data_json = json.dumps(file_data)
             nonce, ciphertext, tag = self.aes_manager.encrypt(encrypted_file_data_json)
-
-            full_encrypted_data = nonce + b'|' + ciphertext + b'|' + tag
-
+            full_encrypted_data = nonce + b'<-->' + ciphertext + b'<-->' + tag
             # Envia o tamanho total dos dados criptografados (incluindo nonce, ciphertext, tag)
             self.client_socket.sendall(len(full_encrypted_data).to_bytes(4, 'big'))
             self.client_socket.sendall(full_encrypted_data)

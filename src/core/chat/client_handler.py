@@ -43,6 +43,7 @@ class ClientHandler(QObject):
         self._running = True
         self.client_socket.settimeout(host_client_data_receive_timeout)
         self.aes_manager = AESManager(session_aes_key_bytes)
+        print(f"[DEBUG] [ClientHandler] Handler para {addr[0]} inicializado com session_aes_key (hash): {hashlib.sha256(session_aes_key_bytes).hexdigest()}")
         self.ecc_manager = ECCManager() # Pode não ser necessário aqui, mas mantido por consistência
         self.dos_detector = dos_detector
         self.request_limiter = RequestLimiter(max_length=CHAT_MESSAGE_MAX_LENGTH)
@@ -248,15 +249,15 @@ class ClientHandler(QObject):
                     return
                 encrypted_full_data += chunk
                 bytes_received += len(chunk)
+            print(f"[DEBUG] [ClientHandler] Arquivo recebido de {self.username}. Tamanho total criptografado: {len(encrypted_full_data)} bytes. Hash dos dados criptografados: {hashlib.sha256(encrypted_full_data).hexdigest()}")
 
-            parts = encrypted_full_data.split(b'|', 2)
+            parts = encrypted_full_data.split(b'<-->', 2)
             if len(parts) != 3:
                 raise ValueError("Formato de dados de arquivo criptografado inválido.")
-
             nonce = parts[0]
             ciphertext = parts[1]
             tag = parts[2]
-
+            
             decrypted_data_json_str = self.aes_manager.decrypt(nonce, ciphertext, tag)
             file_data = json.loads(decrypted_data_json_str)
 
@@ -279,6 +280,7 @@ class ClientHandler(QObject):
                 return
 
             print(f"[INFO] [ClientHandler] Arquivo '{original_filename}' ({mime_type}) de {self.username} recebido e verificado. Emitindo para retransmissão.")
+            print(f"[DEBUG] [ClientHandler] Retransmitindo arquivo. Tamanho dos dados: {len(file_data)} bytes. Hash dos dados: {hashlib.sha256(file_content_b64.encode('utf-8')).hexdigest()}")
 
             # Adiciona o username ao JSON antes de emitir para retransmissão
             file_data["sender_username"] = self.username
