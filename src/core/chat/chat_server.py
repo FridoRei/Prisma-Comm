@@ -16,7 +16,7 @@ import json
 chat_server_running = False
 FILE_MAX_SIZE = 10 * 1024 * 1024
 
-def file_queue_processor(dos_detector: DoSDetector):
+def file_queue_processor(dos_detector: DoSDetector, chat_widget_instance):
     print("[INFO] [ChatServer] Thread de processamento de fila de arquivos iniciada.")
     while chat_server_running: 
         try:
@@ -59,7 +59,7 @@ def broadcast_from_host(message: str, chat_widget_instance):
         except Exception as e:
             print(f"[ERROR] [ChatServer] Erro ao tentar broadcast para {handler.username} ({handler.addr}): {e}")
 
-def handle_file_transfer(file_data_dict: dict, sender_conn: socket.socket, aes_manager: AESManager, dos_detector: DoSDetector):
+def handle_file_transfer(file_data_dict: dict, sender_conn: socket.socket, aes_manager: AESManager, dos_detector: DoSDetector, chat_widget_instance):
     client_ip = sender_conn.getpeername()[0] 
     sender_username = file_data_dict.get("sender_username", "Desconhecido")
     original_filename = file_data_dict.get("filename", "arquivo_desconhecido")
@@ -82,6 +82,16 @@ def handle_file_transfer(file_data_dict: dict, sender_conn: socket.socket, aes_m
             print(f"[ERROR] [ChatServer] Erro de integridade no arquivo '{original_filename}' de {client_ip}. Hash inválido.")
             return
 
+        file_content_bytes = AESManager.base64_to_bytes(file_content_b64)
+        if chat_widget_instance:
+            chat_widget_instance.add_file_to_chat(
+                original_filename,
+                mime_type,
+                file_content_bytes, 
+                sender_username
+            )
+            chat_widget_instance.add_message_to_chat(f"[INFO] Arquivo '{original_filename}' de {sender_username} recebido pelo Host.")        
+            
         broadcast_file_to_clients(file_data_dict, sender_conn) 
 
     except Exception as e:
@@ -153,7 +163,7 @@ def start_server(chat_widget_instance, port, dos_detector: DoSDetector, host_cli
         global chat_server_running
         chat_server_running = True
 
-        file_processor_thread = threading.Thread(target=file_queue_processor, args=(dos_detector,), daemon=True)
+        file_processor_thread = threading.Thread(target=file_queue_processor, args=(dos_detector, chat_widget_instance), daemon=True)
         file_processor_thread.start()
         print("[INFO] [ChatServer] Thread de processamento de fila de arquivos iniciada.")
 
