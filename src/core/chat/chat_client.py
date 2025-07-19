@@ -6,14 +6,14 @@ from src.core.crypto.aes_manager import AESManager
 import os
 import json
 import hashlib
-import mimetypes # Importar mimetypes
+import mimetypes 
 
 class ChatClientWorker(QObject):
     message_received = Signal(str)
     connection_error = Signal(str)
     disconnected = Signal()
     specific_error = Signal(str)
-    file_received = Signal(str, str, bytes, str) # Adicionado sender_username ao sinal
+    file_received = Signal(str, str, bytes, str) 
 
     def __init__(self, client_socket, aes_manager: AESManager):
         super().__init__()
@@ -37,8 +37,7 @@ class ChatClientWorker(QObject):
     @Slot()
     def listen_for_messages(self):
         while self._running:
-            try:
-                # Peek para verificar se é um arquivo (primeiros 4 bytes indicam o tamanho total)
+            try:               
                 header_bytes = self.client_socket.recv(4, socket.MSG_PEEK)
                 if not header_bytes:
                     self.message_received.emit("[INFO] Conexão perdida com o servidor.")
@@ -48,18 +47,13 @@ class ChatClientWorker(QObject):
 
                 try:
                     data_length = int.from_bytes(header_bytes, 'big')
-                    # Se o tamanho for maior que 0 e dentro de um limite razoável para arquivos
-                    # (FILE_MAX_SIZE + um buffer para nonce, ciphertext, tag)
                     if data_length > 0 and data_length <= 10 * 1024 * 1024 + 4096:
-                        # Consome os 4 bytes do cabeçalho de tamanho
                         self.client_socket.recv(4)
-                        self._handle_incoming_file(data_length) # Passa o tamanho total esperado
+                        self._handle_incoming_file(data_length)
                         continue
                 except ValueError:
-                    # Não é um cabeçalho de tamanho de arquivo, então é uma mensagem de texto normal
                     pass
 
-                # Se não for um arquivo, tenta receber como mensagem de texto
                 encrypted_data_b64 = self.client_socket.recv(8192).decode('utf-8')
                 if not encrypted_data_b64:
                     self.message_received.emit("[INFO] Conexão perdida com o servidor.")
@@ -80,7 +74,6 @@ class ChatClientWorker(QObject):
                         self.disconnected.emit()
                         break
                     else:
-                        # Mensagens de controle do servidor que não são JSON criptografado
                         self.message_received.emit(f"[SERVER INFO] {encrypted_data_b64}")
                         print(f"[INFO] [ChatClientWorker] Mensagem de controle do servidor: {encrypted_data_b64}")
                         continue
@@ -99,7 +92,6 @@ class ChatClientWorker(QObject):
                     sender_username = message_data.get("sender_username", "Desconhecido")
 
                     if msg_type == "text_message" and msg_content and msg_hash:
-                        # Verificar integridade da mensagem de texto
                         calculated_hash = hashlib.sha256(msg_content.encode('utf-8')).hexdigest()
                         if calculated_hash != msg_hash:
                             print(f"[ERROR] [ChatClientWorker] Erro de integridade na mensagem de {sender_username}. Hash inválido.")
@@ -145,8 +137,6 @@ class ChatClientWorker(QObject):
 
     def _handle_incoming_file(self, total_data_length: int):
         try:
-            # total_data_length já foi lido e consumido do socket
-            # Agora, leia o restante dos dados criptografados
             encrypted_full_data = b''
             bytes_received = 0
             while bytes_received < total_data_length:
@@ -159,7 +149,7 @@ class ChatClientWorker(QObject):
                 bytes_received += len(chunk)
             print(f"[DEBUG] [ChatClientWorker] Arquivo recebido. Tamanho total criptografado: {len(encrypted_full_data)} bytes. Hash dos dados criptografados: {hashlib.sha256(encrypted_full_data).hexdigest()}")
 
-            parts = encrypted_full_data.split(b'|', 2)
+            parts = encrypted_full_data.split(b'<-->', 2)
             if len(parts) != 3:
                 raise ValueError("Formato de dados de arquivo criptografado inválido.")
 
@@ -197,8 +187,6 @@ class ChatClientWorker(QObject):
         except Exception as e:
             print(f"[ERROR] [ChatClientWorker] Erro ao lidar com arquivo recebido: {e}")
             self.message_received.emit(f"[ERRO] Erro ao receber arquivo: {e}")
-            # Não desconecta aqui, pois pode ser um erro de um único arquivo, não da conexão
-            # self.disconnected.emit()
 
 class ChatClient:
     def __init__(self, host_ip, port, chat_widget=None, nome_usuario="Usuário", ecc_manager=None, session_aes_key: bytes = None, recive_timeout: int = 1, handshake_timeout: int = 5):
@@ -249,10 +237,8 @@ class ChatClient:
                 print(f"[ERROR] [ChatClient] Erro ao processar resposta inicial do servidor: {e}")
                 raise
 
-
-            # Envia o nome de usuário encapsulado em JSON
             username_data = {
-                "type": "username_init", # Novo tipo para identificação inicial
+                "type": "username_init", 
                 "content": self.nome_usuario,
                 "hash": hashlib.sha256(self.nome_usuario.encode('utf-8')).hexdigest()
             }
@@ -309,7 +295,6 @@ class ChatClient:
             if not self.aes_manager:
                 raise Exception("Chave AES não estabelecida. Handshake ECC falhou?")
 
-            # Encapsula a mensagem de texto em JSON
             message_data = {
                 "type": "text_message",
                 "content": message,
@@ -381,18 +366,17 @@ class ChatClient:
                 mime_type = "application/octet-stream"
 
             file_data = {
-                "type": "archive", # Adicionado o tipo
+                "type": "archive",
                 "filename": filename,
                 "mime_type": mime_type,
-                "content": AESManager.bytes_to_base64(file_content), # Certifique-se de que isso está correto
+                "content": AESManager.bytes_to_base64(file_content), 
                 "hash": file_hash,
-                "sender_username": self.nome_usuario # Adicionado sender_username
+                "sender_username": self.nome_usuario 
             }
 
             encrypted_file_data_json = json.dumps(file_data)
             nonce, ciphertext, tag = self.aes_manager.encrypt(encrypted_file_data_json)
             full_encrypted_data = nonce + b'<-->' + ciphertext + b'<-->' + tag
-            # Envia o tamanho total dos dados criptografados (incluindo nonce, ciphertext, tag)
             self.client_socket.sendall(len(full_encrypted_data).to_bytes(4, 'big'))
             self.client_socket.sendall(full_encrypted_data)
 

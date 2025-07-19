@@ -18,12 +18,11 @@ def broadcast_from_host(message: str, chat_widget_instance):
         print("[WARNING] [ChatServer] Tentativa de broadcast de mensagem vazia.")
         return
 
-    # Encapsula a mensagem do host em JSON
     message_data = {
         "type": "text_message",
         "content": message,
         "hash": hashlib.sha256(message.encode('utf-8')).hexdigest(),
-        "sender_username": "Host" # O host é o remetente
+        "sender_username": "Host"
     }
 
     with clientes_lock:
@@ -36,15 +35,14 @@ def broadcast_from_host(message: str, chat_widget_instance):
     for handler in current_handlers:
         try:
             if handler._running:
-                handler.send_to_client(message_data) # Envia o dicionário JSON
+                handler.send_to_client(message_data) 
             else:
                 print(f"[WARNING] [ChatServer] Handler para {handler.username} ({handler.addr}) não está rodando, pulando broadcast.")
         except Exception as e:
             print(f"[ERROR] [ChatServer] Erro ao tentar broadcast para {handler.username} ({handler.addr}): {e}")
 
-# handle_file_transfer agora recebe o dicionário JSON completo do arquivo
 def handle_file_transfer(file_data_dict: dict, sender_conn: socket.socket, aes_manager: AESManager, dos_detector: DoSDetector):
-    client_ip = sender_conn.getpeername()[0] # Obtém o IP do socket remetente
+    client_ip = sender_conn.getpeername()[0] 
     sender_username = file_data_dict.get("sender_username", "Desconhecido")
     original_filename = file_data_dict.get("filename", "arquivo_desconhecido")
     mime_type = file_data_dict.get("mime_type", "application/octet-stream")
@@ -58,14 +56,11 @@ def handle_file_transfer(file_data_dict: dict, sender_conn: socket.socket, aes_m
         return
 
     try:
-        # Verifica o tamanho do conteúdo Base64 para estimar o tamanho real do arquivo
-        # Uma estimativa grosseira é que Base64 aumenta o tamanho em ~33%
         estimated_file_size = len(AESManager.base64_to_bytes(file_content_b64))
         if estimated_file_size > FILE_MAX_SIZE:
             print(f"[WARNING] [ChatServer] Arquivo de {client_ip} excede o limite de tamanho ({estimated_file_size} bytes). Descartando.")
             return
 
-        # Re-verifica o hash (já verificado no ClientHandler, mas uma camada extra de segurança)
         calculated_hash = hashlib.sha256(AESManager.base64_to_bytes(file_content_b64)).hexdigest()
         if calculated_hash != received_hash:
             print(f"[ERROR] [ChatServer] Erro de integridade no arquivo '{original_filename}' de {client_ip}. Hash inválido.")
@@ -73,20 +68,19 @@ def handle_file_transfer(file_data_dict: dict, sender_conn: socket.socket, aes_m
 
         print(f"[INFO] [ChatServer] Arquivo '{original_filename}' ({mime_type}) de {client_ip} ({sender_username}) recebido e verificado. Retransmitindo...")
 
-        # O dicionário file_data_dict já contém o sender_username e o tipo "archive"
-        broadcast_file_to_clients(file_data_dict, sender_conn) # Passa o dicionário JSON
+        broadcast_file_to_clients(file_data_dict, sender_conn) 
 
     except Exception as e:
         print(f"[ERROR] [ChatServer] Erro ao lidar com transferência de arquivo de {client_ip}: {e}")
         import traceback
         traceback.print_exc()
 
-# broadcast_file_to_clients agora recebe o dicionário JSON completo do arquivo
 def broadcast_file_to_clients(file_data_dict: dict, sender_conn: socket.socket):
     """
     Retransmite um arquivo para todos os clientes conectados, exceto o remetente.
     Os dados do arquivo já devem estar em formato JSON (não criptografados).
     """
+    
     with clientes_lock:
         current_handlers = handlers.copy()
 
@@ -94,7 +88,7 @@ def broadcast_file_to_clients(file_data_dict: dict, sender_conn: socket.socket):
         print("[INFO] [ChatServer] Nenhum cliente conectado para retransmissão de arquivo.")
         return
 
-    json_file_str = json.dumps(file_data_dict) # Converte o dicionário para string JSON
+    json_file_str = json.dumps(file_data_dict) 
 
     for handler in current_handlers:
         if handler.client_socket != sender_conn and handler._running:
@@ -105,10 +99,9 @@ def broadcast_file_to_clients(file_data_dict: dict, sender_conn: socket.socket):
                 if dest_aes_key:
                     dest_aes_manager = AESManager(dest_aes_key)
 
-                    nonce, ciphertext, tag = dest_aes_manager.encrypt(json_file_str.encode('utf-8')) # Criptografa a string JSON
-                    encrypted_file_data_for_client = nonce + b'|' + ciphertext + b'|' + tag
+                    nonce, ciphertext, tag = dest_aes_manager.encrypt(json_file_str.encode('utf-8')) 
+                    encrypted_file_data_for_client = nonce + b'<-->' + ciphertext + b'<-->' + tag
 
-                    # Envia o tamanho total dos dados criptografados (incluindo nonce, ciphertext, tag)
                     handler.client_socket.sendall(len(encrypted_file_data_for_client).to_bytes(4, 'big'))
                     handler.client_socket.sendall(encrypted_file_data_for_client)
                     print(f"[INFO] [ChatServer] Arquivo retransmitido para {handler.username} ({handler.addr[0]}).")
@@ -194,8 +187,6 @@ def start_server(chat_widget_instance, port, dos_detector: DoSDetector, host_cli
                         handler.new_message_for_host.connect(chat_widget_instance.add_message_to_chat)
                         handler.client_status_for_host.connect(chat_widget_instance.add_message_to_chat)
                         handler.user_list_updated.connect(chat_widget_instance.update_user_list)
-                        # Conecta o sinal file_received_from_client para chamar handle_file_transfer
-                        # Passa o dicionário JSON completo do arquivo
                         handler.file_received_from_client.connect(
                             lambda file_data_dict, conn_obj, aes_mgr, dos_det:
                             threading.Thread(target=handle_file_transfer, args=(file_data_dict, conn_obj, aes_mgr, dos_det), daemon=True).start()
