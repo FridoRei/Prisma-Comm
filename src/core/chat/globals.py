@@ -1,4 +1,5 @@
 import threading
+from queue import Queue
 
 clientes_lock = threading.Lock()
 handlers = []
@@ -11,3 +12,4 @@ connected_users_lock = threading.Lock()
 authenticated_ips = {}
 authenticated_ips_lock = threading.Lock()
 
+file_transfer_queue = Queue()

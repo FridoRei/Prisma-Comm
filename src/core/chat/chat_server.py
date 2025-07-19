@@ -1,10 +1,13 @@
 import socket
 import threading
-from src.core.chat.globals import clientes_lock, handlers, connected_users_lock, connected_users, authenticated_ips, authenticated_ips_lock, client_aes_keys, client_aes_keys_lock
+import traceback
+from queue import Empty
+from src.core.chat.globals import clientes_lock, handlers, connected_users_lock, connected_users, authenticated_ips, authenticated_ips_lock, client_aes_keys, client_aes_keys_lock, file_transfer_queue
 from src.core.chat.client_handler import ClientHandler
 from cryptography.hazmat.primitives.asymmetric import ed25519
 from src.core.network.dos_detector import DoSDetector
 import datetime
+import time
 from src.core.crypto.aes_manager import AESManager
 import os
 import hashlib
@@ -12,6 +15,22 @@ import json
 
 chat_server_running = False
 FILE_MAX_SIZE = 10 * 1024 * 1024
+
+def file_queue_processor(dos_detector: DoSDetector):
+    print("[INFO] [ChatServer] Thread de processamento de fila de arquivos iniciada.")
+    while chat_server_running: 
+        try:
+            file_data, sender_conn, aes_manager = file_transfer_queue.get(timeout=1) 
+            print(f"[DEBUG] [ChatServer] Item de arquivo retirado da fila. Remetente: {sender_conn.getpeername()[0]}.")
+            handle_file_transfer(file_data, sender_conn, aes_manager, dos_detector)
+            file_transfer_queue.task_done() 
+        except Empty: 
+            continue    
+        except Exception as e:
+            print(f"[ERROR] [ChatServer] Erro na thread de processamento de fila de arquivos: {e}")
+            traceback.print_exc()
+        time.sleep(0.1) 
+    print("[INFO] [ChatServer] Thread de processamento de fila de arquivos encerrada.")
 
 def broadcast_from_host(message: str, chat_widget_instance):
     if not message:
@@ -72,7 +91,6 @@ def handle_file_transfer(file_data_dict: dict, sender_conn: socket.socket, aes_m
 
     except Exception as e:
         print(f"[ERROR] [ChatServer] Erro ao lidar com transferência de arquivo de {client_ip}: {e}")
-        import traceback
         traceback.print_exc()
 
 def broadcast_file_to_clients(file_data_dict: dict, sender_conn: socket.socket):
@@ -80,7 +98,7 @@ def broadcast_file_to_clients(file_data_dict: dict, sender_conn: socket.socket):
     Retransmite um arquivo para todos os clientes conectados, exceto o remetente.
     Os dados do arquivo já devem estar em formato JSON (não criptografados).
     """
-    
+    print(f"[DEBUG] [ChatServer] Arquivo recebido:{file_data_dict}, sender: {sender_conn}")
     with clientes_lock:
         current_handlers = handlers.copy()
 
@@ -136,6 +154,10 @@ def start_server(chat_widget_instance, port, dos_detector: DoSDetector, host_cli
         global chat_server_running
         chat_server_running = True
 
+        file_processor_thread = threading.Thread(target=file_queue_processor, args=(dos_detector,), daemon=True)
+        file_processor_thread.start()
+        print("[INFO] [ChatServer] Thread de processamento de fila de arquivos iniciada.")
+
         while chat_server_running:
             try:
                 conn, addr = server_socket.accept()
@@ -180,6 +202,7 @@ def start_server(chat_widget_instance, port, dos_detector: DoSDetector, host_cli
                         continue
 
                     handler = ClientHandler(conn, addr, session_key_for_client, dos_detector, host_client_data_receive_timeout)
+                    print(f"[DEBUG] [ChatServer] Criado ClientHandler com ID: {handler.client_id}")
 
                     thread = threading.Thread(target=handler.run, daemon=True)
 
@@ -187,12 +210,7 @@ def start_server(chat_widget_instance, port, dos_detector: DoSDetector, host_cli
                         handler.new_message_for_host.connect(chat_widget_instance.add_message_to_chat)
                         handler.client_status_for_host.connect(chat_widget_instance.add_message_to_chat)
                         handler.user_list_updated.connect(chat_widget_instance.update_user_list)
-                        handler.file_received_from_client.connect(
-                            lambda file_data_dict, conn_obj, aes_mgr, dos_det:
-                            threading.Thread(target=handle_file_transfer, args=(file_data_dict, conn_obj, aes_mgr, dos_det), daemon=True).start()
-                        )
-
-
+                        
                     thread.start()
                 else:
                     print(f"[WARNING] [ChatServer] Conexão ao chat de {client_ip} rejeitada por falta de autenticação ou chave AES \n.")

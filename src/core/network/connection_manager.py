@@ -126,7 +126,6 @@ def perform_ecc_auth_handshake(server_ip: str, auth_port: int, password: str, cl
 
         decrypted_session_key_b64 = temp_aes_manager.decrypt(nonce_key, cipher_key, tag_key)
         session_aes_key = AESManager.base64_to_bytes(decrypted_session_key_b64)
-        print(f"[DEBUG] [ConnectionManager] Cliente recebeu session_aes_key (hash): {hashlib.sha256(session_aes_key).hexdigest()}")
 
         session_aes_manager_for_client = AESManager(session_aes_key)
         encrypted_confirmation_b64 = client_socket.recv(4096).decode('utf-8')

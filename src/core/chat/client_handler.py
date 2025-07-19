@@ -1,7 +1,7 @@
 import traceback
 import socket
 from PySide6.QtCore import QObject, Signal, Slot
-from src.core.chat.globals import clientes_lock, handlers, client_aes_keys, client_aes_keys_lock, connected_users, connected_users_lock, authenticated_ips, authenticated_ips_lock
+from src.core.chat.globals import clientes_lock, handlers, client_aes_keys, client_aes_keys_lock, connected_users, connected_users_lock, authenticated_ips, authenticated_ips_lock, file_transfer_queue
 from src.core.crypto.ecc_manager import ECCManager
 from src.core.crypto.aes_manager import AESManager
 from cryptography.hazmat.primitives.asymmetric import ed25519
@@ -31,8 +31,7 @@ class ClientHandler(QObject):
 
     new_message_for_host = Signal(str)
     client_status_for_host = Signal(str)
-    user_list_updated = Signal()   
-    file_received_from_client = Signal(dict, object, object, object) 
+    user_list_updated = Signal()
 
     def __init__(self, client_socket, addr, session_aes_key_bytes: bytes, dos_detector: DoSDetector, host_client_data_receive_timeout: int):
         super().__init__()
@@ -45,6 +44,7 @@ class ClientHandler(QObject):
         self.ecc_manager = ECCManager() 
         self.dos_detector = dos_detector
         self.request_limiter = RequestLimiter(max_length=CHAT_MESSAGE_MAX_LENGTH)
+        self.client_id = f"Handler-{addr[0]}-{id(self)}"
 
     def stop(self):
         self._running = False
@@ -227,6 +227,7 @@ class ClientHandler(QObject):
             self.client_status_for_host.emit(f"[INFO] Cliente '{self.username}' ({self.addr[0]}) desconectado.")
 
     def _handle_incoming_file(self, total_data_length: int):
+        print(f"[DEBUG] [ClientHandler] Entrou em _handle_incoming_file para {self.username}.")
         try:
             encrypted_full_data = b''
             bytes_received = 0
@@ -266,7 +267,9 @@ class ClientHandler(QObject):
                 return
 
             file_data["sender_username"] = self.username
-            self.file_received_from_client.emit(file_data, self.client_socket, self.aes_manager, self.dos_detector)
+
+            print(f"[DEBUG] [{self.client_id}] Colocando arquivo na fila para processamento.")
+            file_transfer_queue.put((file_data, self.client_socket, self.aes_manager))
 
         except json.JSONDecodeError:
             print(f"[ERROR] [ClientHandler] Erro ao decodificar JSON do arquivo recebido de {self.username} ({self.addr[0]}).")
