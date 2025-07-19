@@ -227,7 +227,6 @@ class ClientHandler(QObject):
             self.client_status_for_host.emit(f"[INFO] Cliente '{self.username}' ({self.addr[0]}) desconectado.")
 
     def _handle_incoming_file(self, total_data_length: int):
-        print(f"[DEBUG] [ClientHandler] Entrou em _handle_incoming_file para {self.username}.")
         try:
             encrypted_full_data = b''
             bytes_received = 0
@@ -268,7 +267,6 @@ class ClientHandler(QObject):
 
             file_data["sender_username"] = self.username
 
-            print(f"[DEBUG] [{self.client_id}] Colocando arquivo na fila para processamento.")
             file_transfer_queue.put((file_data, self.client_socket, self.aes_manager))
 
         except json.JSONDecodeError:

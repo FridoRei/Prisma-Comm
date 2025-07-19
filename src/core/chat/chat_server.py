@@ -21,7 +21,6 @@ def file_queue_processor(dos_detector: DoSDetector):
     while chat_server_running: 
         try:
             file_data, sender_conn, aes_manager = file_transfer_queue.get(timeout=1) 
-            print(f"[DEBUG] [ChatServer] Item de arquivo retirado da fila. Remetente: {sender_conn.getpeername()[0]}.")
             handle_file_transfer(file_data, sender_conn, aes_manager, dos_detector)
             file_transfer_queue.task_done() 
         except Empty: 
@@ -68,8 +67,6 @@ def handle_file_transfer(file_data_dict: dict, sender_conn: socket.socket, aes_m
     received_hash = file_data_dict.get("hash")
     file_content_b64 = file_data_dict.get("content")
 
-    print(f"[INFO] [ChatServer] Iniciando processamento de arquivo de {client_ip} ({sender_username}).")
-
     if not dos_detector.anti_spam_message(client_ip):
         print(f"[SPAM] Transferência de arquivo de {client_ip} bloqueada por anti-spam.")
         return
@@ -85,8 +82,6 @@ def handle_file_transfer(file_data_dict: dict, sender_conn: socket.socket, aes_m
             print(f"[ERROR] [ChatServer] Erro de integridade no arquivo '{original_filename}' de {client_ip}. Hash inválido.")
             return
 
-        print(f"[INFO] [ChatServer] Arquivo '{original_filename}' ({mime_type}) de {client_ip} ({sender_username}) recebido e verificado. Retransmitindo...")
-
         broadcast_file_to_clients(file_data_dict, sender_conn) 
 
     except Exception as e:
@@ -98,7 +93,6 @@ def broadcast_file_to_clients(file_data_dict: dict, sender_conn: socket.socket):
     Retransmite um arquivo para todos os clientes conectados, exceto o remetente.
     Os dados do arquivo já devem estar em formato JSON (não criptografados).
     """
-    print(f"[DEBUG] [ChatServer] Arquivo recebido:{file_data_dict}, sender: {sender_conn}")
     with clientes_lock:
         current_handlers = handlers.copy()
 
@@ -106,8 +100,9 @@ def broadcast_file_to_clients(file_data_dict: dict, sender_conn: socket.socket):
         print("[INFO] [ChatServer] Nenhum cliente conectado para retransmissão de arquivo.")
         return
 
-    json_file_str = json.dumps(file_data_dict) 
-
+    # Converter o dicionário para JSON
+    json_file_str = json.dumps(file_data_dict)
+    
     for handler in current_handlers:
         if handler.client_socket != sender_conn and handler._running:
             try:
@@ -116,13 +111,16 @@ def broadcast_file_to_clients(file_data_dict: dict, sender_conn: socket.socket):
 
                 if dest_aes_key:
                     dest_aes_manager = AESManager(dest_aes_key)
+                    
+                    # Criptografar os dados JSON
+                    nonce, ciphertext, tag = dest_aes_manager.encrypt(json_file_str) 
 
-                    nonce, ciphertext, tag = dest_aes_manager.encrypt(json_file_str.encode('utf-8')) 
                     encrypted_file_data_for_client = nonce + b'<-->' + ciphertext + b'<-->' + tag
 
+                    # Enviar tamanho primeiro
                     handler.client_socket.sendall(len(encrypted_file_data_for_client).to_bytes(4, 'big'))
+                    # Enviar dados criptografados
                     handler.client_socket.sendall(encrypted_file_data_for_client)
-                    print(f"[INFO] [ChatServer] Arquivo retransmitido para {handler.username} ({handler.addr[0]}).")
                 else:
                     print(f"[WARNING] [ChatServer] ERRO: Chave AES não encontrada para {handler.username} ({handler.addr[0]}). Não foi possível retransmitir arquivo.")
             except BrokenPipeError:
@@ -130,6 +128,7 @@ def broadcast_file_to_clients(file_data_dict: dict, sender_conn: socket.socket):
                 handler.stop()
             except Exception as e:
                 print(f"[ERROR] [ChatServer] Erro na retransmissão criptografada de arquivo para {handler.username} ({handler.addr[0]}): {e}")
+
 
 
 def start_server(chat_widget_instance, port, dos_detector: DoSDetector, host_client_data_receive_timeout: int = 5):
@@ -202,7 +201,6 @@ def start_server(chat_widget_instance, port, dos_detector: DoSDetector, host_cli
                         continue
 
                     handler = ClientHandler(conn, addr, session_key_for_client, dos_detector, host_client_data_receive_timeout)
-                    print(f"[DEBUG] [ChatServer] Criado ClientHandler com ID: {handler.client_id}")
 
                     thread = threading.Thread(target=handler.run, daemon=True)
 
